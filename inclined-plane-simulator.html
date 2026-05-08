@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>斜面台車実験シミュレーター</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: #f5f0e8;
+  min-height: 100vh;
+  overflow-x: hidden;
+  touch-action: manipulation;
+}
+
+/* ── Step Indicator ── */
+#step-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0;
+  padding: 14px 20px 10px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #aaa;
+  font-weight: 700;
+}
+.step-item .step-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 2px solid #ccc;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+  background: #fff;
+  transition: all 0.3s;
+}
+.step-item.active .step-num { background: #e74c3c; border-color: #e74c3c; color: #fff; }
+.step-item.done .step-num { background: #27ae60; border-color: #27ae60; color: #fff; }
+.step-item.active { color: #e74c3c; }
+.step-item.done { color: #27ae60; }
+.step-connector {
+  width: 30px; height: 2px;
+  background: #ddd;
+  margin: 0 4px;
+}
+.step-connector.done { background: #27ae60; }
+
+/* ── Phase containers ── */
+.phase { display: none; padding: 16px; }
+.phase.active { display: block; }
+
+/* ─────────────────────────────────────────
+   PHASE 1
+───────────────────────────────────────── */
+#phase1 { text-align: center; }
+#phase1 h2 { font-size: 20px; margin-bottom: 4px; color: #333; }
+#phase1 .subtitle { font-size: 13px; color: #888; margin-bottom: 12px; }
+
+#incline-canvas-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  background: #e8f4e8;
+  touch-action: none;
+}
+#inclineCanvas { display: block; width: 100%; }
+
+.angle-display {
+  font-size: 48px;
+  font-weight: 700;
+  color: #e74c3c;
+  letter-spacing: -1px;
+  margin: 12px 0 4px;
+}
+.angle-display span { font-size: 24px; }
+.angle-hint { font-size: 13px; color: #888; margin-bottom: 16px; }
+
+#btn-start {
+  display: inline-block;
+  padding: 14px 48px;
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  border: none;
+  border-radius: 50px;
+  box-shadow: 0 4px 14px rgba(231,76,60,0.4);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  font-family: inherit;
+}
+#btn-start:active { transform: scale(0.96); box-shadow: 0 2px 8px rgba(231,76,60,0.3); }
+
+/* animation overlay */
+#anim-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+}
+#anim-overlay.show { display: flex; }
+#anim-canvas { border-radius: 12px; background: #e8f4e8; }
+.anim-msg { color: #fff; font-size: 18px; font-weight: 700; }
+
+/* ─────────────────────────────────────────
+   PHASE 2
+───────────────────────────────────────── */
+#phase2 h2 { font-size: 20px; color: #333; margin-bottom: 4px; text-align: center; }
+#phase2 .subtitle { font-size: 13px; color: #888; text-align: center; margin-bottom: 14px; }
+
+#tape-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  background: #fff9e6;
+  border: 2px solid #d4b483;
+  position: relative;
+  cursor: crosshair;
+  user-select: none;
+}
+#tape-scroll-container::-webkit-scrollbar { height: 6px; }
+#tape-scroll-container::-webkit-scrollbar-track { background: #f0e0b0; }
+#tape-scroll-container::-webkit-scrollbar-thumb { background: #c4944a; border-radius: 3px; }
+
+#tapeCanvas { display: block; }
+
+.cut-instruction {
+  font-size: 13px; color: #8B6914;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 10px 0;
+  text-align: center;
+}
+
+/* tray */
+#tray-label { font-size: 14px; font-weight: 700; color: #555; margin: 14px 0 8px; }
+#tray {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 80px;
+  padding: 10px;
+  background: #fff;
+  border: 2px dashed #bbb;
+  border-radius: 10px;
+  align-items: flex-end;
+}
+.tray-piece {
+  width: 32px;
+  background: linear-gradient(to top, #f8d56b, #f5c518);
+  border: 1px solid #c4944a;
+  border-radius: 3px;
+  position: relative;
+  cursor: grab;
+  flex-shrink: 0;
+  transition: transform 0.1s;
+}
+.tray-piece:active { transform: scale(1.05); }
+.tray-piece::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 2px; height: 100%;
+  background: repeating-linear-gradient(to bottom, #c4944a 0px, #c4944a 2px, transparent 2px, transparent 6px);
+}
+.tray-piece .piece-label {
+  position: absolute;
+  bottom: -18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #666;
+  white-space: nowrap;
+}
+
+#btn-to-graph {
+  display: block;
+  margin: 16px auto 0;
+  padding: 14px 48px;
+  background: linear-gradient(135deg, #2980b9, #1a6699);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  border: none;
+  border-radius: 50px;
+  box-shadow: 0 4px 14px rgba(41,128,185,0.4);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  opacity: 0.4;
+  pointer-events: none;
+}
+#btn-to-graph.enabled { opacity: 1; pointer-events: auto; }
+#btn-to-graph.enabled:active { transform: scale(0.96); }
+
+/* ─────────────────────────────────────────
+   PHASE 3
+───────────────────────────────────────── */
+#phase3 h2 { font-size: 20px; color: #333; margin-bottom: 4px; text-align: center; }
+#phase3 .subtitle { font-size: 13px; color: #888; text-align: center; margin-bottom: 12px; }
+
+#graph-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+#graph-tray-label { font-size: 14px; font-weight: 700; color: #555; }
+#graph-tray {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 60px;
+  padding: 8px;
+  background: #fff;
+  border: 2px dashed #bbb;
+  border-radius: 10px;
+  align-items: flex-end;
+}
+.graph-tray-piece {
+  width: 32px;
+  cursor: grab;
+  flex-shrink: 0;
+  border-radius: 3px;
+  border: 1px solid #c4944a;
+  background: linear-gradient(to top, #f8d56b, #f5c518);
+  position: relative;
+}
+.graph-tray-piece::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 2px; height: 100%;
+  background: repeating-linear-gradient(to bottom, #c4944a 0px, #c4944a 2px, transparent 2px, transparent 6px);
+}
+
+#graph-canvas-wrapper {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+#graphCanvas { display: block; width: 100%; touch-action: none; }
+
+#result-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  font-size: 15px;
+  line-height: 1.8;
+  display: none;
+}
+#result-box.show { display: block; }
+.result-row { display: flex; justify-content: space-between; align-items: baseline; }
+.result-label { color: #555; }
+.result-value { font-weight: 700; font-size: 18px; color: #e74c3c; }
+.result-theory { font-weight: 700; font-size: 18px; color: #2980b9; }
+.result-divider { border: none; border-top: 1px solid #eee; margin: 8px 0; }
+
+#btn-reset {
+  display: block;
+  margin: 16px auto 32px;
+  padding: 12px 40px;
+  background: #fff;
+  color: #666;
+  font-size: 16px;
+  font-weight: 700;
+  border: 2px solid #ccc;
+  border-radius: 50px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+#btn-reset:active { background: #f0f0f0; }
+
+/* drag ghost */
+#drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  border-radius: 3px;
+  border: 1px solid #c4944a;
+  background: linear-gradient(to top, #f8d56b, #f5c518);
+  opacity: 0.85;
+  display: none;
+}
+</style>
+</head>
+<body>
+
+<!-- Step Indicator -->
+<div id="step-indicator">
+  <div class="step-item active" id="si-1">
+    <div class="step-num">①</div>
+    <div>角度設定</div>
+  </div>
+  <div class="step-connector" id="sc-1"></div>
+  <div class="step-item" id="si-2">
+    <div class="step-num">②</div>
+    <div>テープカット</div>
+  </div>
+  <div class="step-connector" id="sc-2"></div>
+  <div class="step-item" id="si-3">
+    <div class="step-num">③</div>
+    <div>グラフ作成</div>
+  </div>
+</div>
+
+<!-- PHASE 1 -->
+<div class="phase active" id="phase1">
+  <h2>斜面の角度を設定しよう</h2>
+  <p class="subtitle">斜面の上端をドラッグして角度を変えよう</p>
+  <div id="incline-canvas-wrapper">
+    <canvas id="inclineCanvas"></canvas>
+  </div>
+  <div class="angle-display" id="angle-display">30<span>°</span></div>
+  <div class="angle-hint">ドラッグで角度変更（5° ～ 60°）</div>
+  <button id="btn-start">実験開始 ▶</button>
+</div>
+
+<!-- Animation overlay -->
+<div id="anim-overlay">
+  <div class="anim-msg" id="anim-msg">台車が走っています...</div>
+  <canvas id="anim-canvas" width="360" height="220"></canvas>
+</div>
+
+<!-- PHASE 2 -->
+<div class="phase" id="phase2">
+  <h2>記録テープをカットしよう</h2>
+  <p class="subtitle">✂ の位置をタップ／スワイプしてカット</p>
+  <div id="tape-scroll-container">
+    <canvas id="tapeCanvas" height="100"></canvas>
+  </div>
+  <div class="cut-instruction">📌 5打点ごとの点線でカット。3片以上切ったら次へ進めます。</div>
+  <div id="tray-label">🗂 カットしたテープ</div>
+  <div id="tray"></div>
+  <button id="btn-to-graph">グラフへ →</button>
+</div>
+
+<!-- PHASE 3 -->
+<div class="phase" id="phase3">
+  <h2>グラフ用紙にテープを貼ろう</h2>
+  <p class="subtitle">トレーのテープをグラフ用紙にドラッグして並べよう</p>
+  <div id="graph-area">
+    <div id="graph-tray-label">🗂 テープ片（ドラッグしてグラフに貼る）</div>
+    <div id="graph-tray"></div>
+    <div id="graph-canvas-wrapper">
+      <canvas id="graphCanvas"></canvas>
+    </div>
+    <div id="result-box">
+      <div class="result-row">
+        <span class="result-label">実験値の加速度 a</span>
+        <span class="result-value" id="res-measured">―</span>
+      </div>
+      <hr class="result-divider">
+      <div class="result-row">
+        <span class="result-label">理論値 g sinθ</span>
+        <span class="result-theory" id="res-theory">―</span>
+      </div>
+      <hr class="result-divider">
+      <div class="result-row">
+        <span class="result-label">角度 θ</span>
+        <span style="font-weight:700" id="res-angle">―</span>
+      </div>
+    </div>
+    <button id="btn-reset">🔄 最初からやり直す</button>
+  </div>
+</div>
+
+<!-- Drag ghost -->
+<div id="drag-ghost"></div>
+
+<script>
+'use strict';
+
+// ─── Constants ──────────────────────────────────────────────
+const g = 9.8;        // m/s²
+const HZ = 60;        // 打点周波数
+const DT = 1 / HZ;   // 1打点 = 1/60 s
+const CUT_DOTS = 5;   // 5打点でカット
+const CUT_DT = CUT_DOTS * DT;  // 1/12 s
+
+// ─── State ──────────────────────────────────────────────────
+let angleDeg = 30;
+let tapeData = [];       // [{x_start, x_end, length_m}]  raw 60Hz dots positions
+let cutPieces = [];      // [{index, lengthPx, lengthM, lengthCm}]
+let placedPieces = [];   // pieces placed on graph (in order)
+
+// ─── Step indicator ─────────────────────────────────────────
+function setStep(n) {
+  [1,2,3].forEach(i => {
+    const si = document.getElementById('si-' + i);
+    si.classList.remove('active','done');
+    if (i < n) si.classList.add('done');
+    if (i === n) si.classList.add('active');
+  });
+  [1,2].forEach(i => {
+    const sc = document.getElementById('sc-' + i);
+    sc.classList.toggle('done', i < n);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 1 — Incline canvas
+// ─────────────────────────────────────────────────────────────
+const inclineCanvas = document.getElementById('inclineCanvas');
+const incCtx = inclineCanvas.getContext('2d');
+const wrapper = document.getElementById('incline-canvas-wrapper');
+
+let incW, incH;
+function resizeIncline() {
+  incW = wrapper.clientWidth;
+  incH = Math.round(incW * 0.55);
+  inclineCanvas.width = incW;
+  inclineCanvas.height = incH;
+  drawIncline();
+}
+
+// Drag state
+let isDraggingIncline = false;
+const baseX_frac = 0.08; // base left point
+const baseY_frac = 0.88;
+
+function getAngleFromPoint(cx, cy) {
+  const bx = baseX_frac * incW;
+  const by = baseY_frac * incH;
+  const dx = cx - bx;
+  const dy = by - cy;  // upward
+  if (dx <= 0) return angleDeg;
+  let a = Math.atan2(dy, dx) * 180 / Math.PI;
+  return Math.max(5, Math.min(60, a));
+}
+
+function getTopPoint() {
+  const len = incW * 0.82;
+  const bx = baseX_frac * incW;
+  const by = baseY_frac * incH;
+  const rad = angleDeg * Math.PI / 180;
+  return { x: bx + len * Math.cos(rad), y: by - len * Math.sin(rad) };
+}
+
+function drawIncline() {
+  const W = incW, H = incH;
+  incCtx.clearRect(0, 0, W, H);
+
+  // Sky gradient
+  const sky = incCtx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0, '#d0e8ff');
+  sky.addColorStop(1, '#e8f4e8');
+  incCtx.fillStyle = sky;
+  incCtx.fillRect(0, 0, W, H);
+
+  const bx = baseX_frac * W, by = baseY_frac * H;
+  const tp = getTopPoint();
+
+  // Ground
+  incCtx.beginPath();
+  incCtx.moveTo(0, by);
+  incCtx.lineTo(W, by);
+  incCtx.strokeStyle = '#8B6914';
+  incCtx.lineWidth = 3;
+  incCtx.stroke();
+
+  // Vertical support
+  incCtx.beginPath();
+  incCtx.moveTo(bx, by);
+  incCtx.lineTo(bx, by - 16);
+  incCtx.strokeStyle = '#8B5E3C';
+  incCtx.lineWidth = 6;
+  incCtx.stroke();
+
+  // Wood texture incline board
+  incCtx.save();
+  incCtx.beginPath();
+  const thickness = 10;
+  const rad = angleDeg * Math.PI / 180;
+  const nx = Math.sin(rad), ny = Math.cos(rad);
+  incCtx.moveTo(bx, by);
+  incCtx.lineTo(tp.x, tp.y);
+  incCtx.lineTo(tp.x - nx*thickness, tp.y + ny*thickness);
+  incCtx.lineTo(bx - nx*thickness, by + ny*thickness);
+  incCtx.closePath();
+  const woodGrad = incCtx.createLinearGradient(bx, by, tp.x, tp.y);
+  woodGrad.addColorStop(0, '#c8903a');
+  woodGrad.addColorStop(0.5, '#d4a555');
+  woodGrad.addColorStop(1, '#b8823a');
+  incCtx.fillStyle = woodGrad;
+  incCtx.fill();
+  incCtx.strokeStyle = '#8B6914';
+  incCtx.lineWidth = 2;
+  incCtx.stroke();
+  incCtx.restore();
+
+  // Angle arc
+  incCtx.beginPath();
+  incCtx.arc(bx, by, 36, -Math.PI * angleDeg / 180, 0, false);
+  incCtx.strokeStyle = '#e74c3c';
+  incCtx.lineWidth = 2;
+  incCtx.stroke();
+
+  // Angle label
+  const midAngle = -angleDeg * Math.PI / 360;
+  incCtx.fillStyle = '#e74c3c';
+  incCtx.font = `bold ${Math.round(W*0.035)}px Noto Sans JP, sans-serif`;
+  incCtx.fillText(`${Math.round(angleDeg)}°`, bx + 42 * Math.cos(midAngle) - 10, by + 42 * Math.sin(midAngle) + 4);
+
+  // Drag handle at top
+  incCtx.beginPath();
+  incCtx.arc(tp.x, tp.y, 13, 0, Math.PI * 2);
+  incCtx.fillStyle = '#e74c3c';
+  incCtx.fill();
+  incCtx.strokeStyle = '#fff';
+  incCtx.lineWidth = 2;
+  incCtx.stroke();
+  incCtx.fillStyle = '#fff';
+  incCtx.font = 'bold 14px sans-serif';
+  incCtx.textAlign = 'center';
+  incCtx.textBaseline = 'middle';
+  incCtx.fillText('↕', tp.x, tp.y);
+  incCtx.textAlign = 'left';
+  incCtx.textBaseline = 'alphabetic';
+}
+
+function onInclinePointerDown(e) {
+  const rect = inclineCanvas.getBoundingClientRect();
+  const scaleX = incW / rect.width;
+  const scaleY = incH / rect.height;
+  const pt = e.touches ? e.touches[0] : e;
+  const cx = (pt.clientX - rect.left) * scaleX;
+  const cy = (pt.clientY - rect.top) * scaleY;
+  const tp = getTopPoint();
+  const dist = Math.hypot(cx - tp.x, cy - tp.y);
+  if (dist < 40) isDraggingIncline = true;
+  e.preventDefault();
+}
+function onInclinePointerMove(e) {
+  if (!isDraggingIncline) return;
+  const rect = inclineCanvas.getBoundingClientRect();
+  const scaleX = incW / rect.width;
+  const scaleY = incH / rect.height;
+  const pt = e.touches ? e.touches[0] : e;
+  const cx = (pt.clientX - rect.left) * scaleX;
+  const cy = (pt.clientY - rect.top) * scaleY;
+  angleDeg = getAngleFromPoint(cx, cy);
+  document.getElementById('angle-display').innerHTML = `${Math.round(angleDeg)}<span>°</span>`;
+  drawIncline();
+  e.preventDefault();
+}
+function onInclinePointerUp(e) { isDraggingIncline = false; }
+
+inclineCanvas.addEventListener('touchstart', onInclinePointerDown, {passive:false});
+inclineCanvas.addEventListener('touchmove', onInclinePointerMove, {passive:false});
+inclineCanvas.addEventListener('touchend', onInclinePointerUp);
+inclineCanvas.addEventListener('mousedown', onInclinePointerDown);
+window.addEventListener('mousemove', onInclinePointerMove);
+window.addEventListener('mouseup', onInclinePointerUp);
+
+window.addEventListener('resize', resizeIncline);
+resizeIncline();
+
+// ─────────────────────────────────────────────────────────────
+//  Animation
+// ─────────────────────────────────────────────────────────────
+const animOverlay = document.getElementById('anim-overlay');
+const animCanvas = document.getElementById('anim-canvas');
+const animCtx = animCanvas.getContext('2d');
+const animMsg = document.getElementById('anim-msg');
+
+function generateTapeData(angleDeg) {
+  const a = g * Math.sin(angleDeg * Math.PI / 180);
+  // Simulate cart from rest; record positions at each 1/60 s tick
+  // Let's record enough ticks for a good tape: ~2 seconds = 120 dots
+  const totalDots = 120;
+  const positions = [];
+  for (let i = 0; i < totalDots; i++) {
+    const t = i * DT;
+    positions.push(0.5 * a * t * t); // meters
+  }
+  tapeData = [];
+  for (let i = 0; i + CUT_DOTS < totalDots; i += CUT_DOTS) {
+    const lenM = positions[i + CUT_DOTS] - positions[i];
+    tapeData.push({ dotStart: i, dotEnd: i + CUT_DOTS, lengthM: lenM });
+  }
+}
+
+let animRAF = null;
+function runAnimation() {
+  animOverlay.classList.add('show');
+  const AW = animCanvas.width, AH = animCanvas.height;
+  const a = g * Math.sin(angleDeg * Math.PI / 180);
+  const duration = 1400; // ms
+  let start = null;
+
+  function frame(ts) {
+    if (!start) start = ts;
+    const elapsed = ts - start;
+    const frac = Math.min(elapsed / duration, 1);
+
+    // Draw scene
+    animCtx.clearRect(0, 0, AW, AH);
+    // bg
+    const bg = animCtx.createLinearGradient(0,0,0,AH);
+    bg.addColorStop(0, '#d0e8ff');
+    bg.addColorStop(1, '#e8f4e8');
+    animCtx.fillStyle = bg;
+    animCtx.fillRect(0, 0, AW, AH);
+
+    const rad = angleDeg * Math.PI / 180;
+    const bx = 30, by = AH - 30;
+    const tpx = bx + (AW - 60) * Math.cos(rad);
+    const tpy = by - (AW - 60) * Math.sin(rad);
+
+    // Ground
+    animCtx.beginPath();
+    animCtx.moveTo(0, by);
+    animCtx.lineTo(AW, by);
+    animCtx.strokeStyle = '#8B6914'; animCtx.lineWidth = 3; animCtx.stroke();
+
+    // Board
+    animCtx.save();
+    animCtx.beginPath();
+    const th = 8, nx = Math.sin(rad), ny = Math.cos(rad);
+    animCtx.moveTo(bx, by);
+    animCtx.lineTo(tpx, tpy);
+    animCtx.lineTo(tpx - nx*th, tpy + ny*th);
+    animCtx.lineTo(bx - nx*th, by + ny*th);
+    animCtx.closePath();
+    animCtx.fillStyle = '#c8903a'; animCtx.fill();
+    animCtx.strokeStyle = '#8B6914'; animCtx.lineWidth = 1.5; animCtx.stroke();
+    animCtx.restore();
+
+    // Cart position (physics: s = 0.5*a*t², t in seconds, display fraction)
+    // map frac to position along incline
+    const cartT = frac * 1.4;
+    const cartS = 0.5 * a * cartT * cartT; // meters
+    const maxS = 0.5 * a * 1.96;
+    const cartFrac = Math.min(cartS / maxS, 1) * 0.88;
+    const cx = bx + (AW - 60) * cartFrac * Math.cos(rad);
+    const cy = by - (AW - 60) * cartFrac * Math.sin(rad);
+
+    // Cart body
+    animCtx.save();
+    animCtx.translate(cx, cy);
+    animCtx.rotate(-rad);
+    animCtx.fillStyle = '#3498db';
+    animCtx.fillRect(-16, -10, 32, 14);
+    animCtx.strokeStyle = '#2980b9'; animCtx.lineWidth = 1.5; animCtx.strokeRect(-16,-10,32,14);
+    // wheels
+    [[-10, 4],[10, 4]].forEach(([wx, wy]) => {
+      animCtx.beginPath();
+      animCtx.arc(wx, wy, 5, 0, Math.PI*2);
+      animCtx.fillStyle = '#2c3e50'; animCtx.fill();
+      animCtx.beginPath();
+      animCtx.arc(wx, wy, 2, 0, Math.PI*2);
+      animCtx.fillStyle = '#aaa'; animCtx.fill();
+    });
+    animCtx.restore();
+
+    // Tape trailing
+    if (frac > 0.05) {
+      animCtx.save();
+      animCtx.strokeStyle = '#f5c518';
+      animCtx.lineWidth = 4;
+      animCtx.beginPath();
+      animCtx.moveTo(bx + 4, by - 5);
+      animCtx.lineTo(cx - 16 * Math.cos(rad), cy + 16 * Math.sin(rad));
+      animCtx.stroke();
+      animCtx.restore();
+    }
+
+    if (frac < 1) {
+      animRAF = requestAnimationFrame(frame);
+    } else {
+      animMsg.textContent = '完了！テープを確認しよう';
+      setTimeout(() => {
+        animOverlay.classList.remove('show');
+        goToPhase2();
+      }, 800);
+    }
+  }
+  animRAF = requestAnimationFrame(frame);
+}
+
+document.getElementById('btn-start').addEventListener('click', () => {
+  generateTapeData(angleDeg);
+  runAnimation();
+});
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 2 — Tape Canvas
+// ─────────────────────────────────────────────────────────────
+const tapeCanvas = document.getElementById('tapeCanvas');
+const tapeCtx = tapeCanvas.getContext('2d');
+const tapeScroll = document.getElementById('tape-scroll-container');
+
+const TAPE_H = 100;
+const DOT_ROW = 58;    // y for dots
+const TAPE_PX_PER_M = 9000; // pixels per meter on tape
+const TAPE_SEGMENT_PX = 28; // px per 5-dot segment (fixed display width)
+const CUT_ZONES = [];  // x positions of cut lines
+let cutsMade = new Set();   // which cut zone indices have been cut
+
+function buildCutZones() {
+  CUT_ZONES.length = 0;
+  // Each segment is CUT_DOTS dots wide
+  const totalSegs = tapeData.length;
+  // Tape starts at x=40, each segment = TAPE_SEGMENT_PX px
+  for (let i = 0; i <= totalSegs; i++) {
+    CUT_ZONES.push(40 + i * TAPE_SEGMENT_PX);
+  }
+}
+
+function drawTape() {
+  const totalSegs = tapeData.length;
+  const tapeW = 40 + totalSegs * TAPE_SEGMENT_PX + 40;
+  tapeCanvas.width = tapeW;
+  tapeCanvas.height = TAPE_H;
+
+  // Background
+  tapeCtx.fillStyle = '#fff9e6';
+  tapeCtx.fillRect(0, 0, tapeW, TAPE_H);
+
+  // Tape body
+  tapeCtx.fillStyle = '#f5e898';
+  tapeCtx.strokeStyle = '#c4944a';
+  tapeCtx.lineWidth = 1.5;
+  tapeCtx.beginPath();
+  tapeCtx.rect(30, 15, tapeW - 60, TAPE_H - 30);
+  tapeCtx.fill();
+  tapeCtx.stroke();
+
+  // Segment guide lines (dashed)
+  CUT_ZONES.forEach((x, i) => {
+    if (i === 0 || i === CUT_ZONES.length - 1) return;
+    if (cutsMade.has(i)) return;
+    tapeCtx.save();
+    tapeCtx.setLineDash([4, 4]);
+    tapeCtx.strokeStyle = 'rgba(180,130,50,0.35)';
+    tapeCtx.lineWidth = 1;
+    tapeCtx.beginPath();
+    tapeCtx.moveTo(x, 15);
+    tapeCtx.lineTo(x, TAPE_H - 15);
+    tapeCtx.stroke();
+    tapeCtx.restore();
+  });
+
+  // Dots (60Hz)
+  const totalDots = totalSegs * CUT_DOTS + 1;
+  for (let d = 0; d < totalDots; d++) {
+    const x = 40 + d * (TAPE_SEGMENT_PX / CUT_DOTS);
+    const isBig = d % CUT_DOTS === 0;
+    tapeCtx.beginPath();
+    tapeCtx.arc(x, DOT_ROW, isBig ? 3.5 : 2, 0, Math.PI * 2);
+    tapeCtx.fillStyle = isBig ? '#8B4513' : '#c4944a';
+    tapeCtx.fill();
+  }
+
+  // Segment length labels
+  tapeData.forEach((seg, i) => {
+    const x = 40 + i * TAPE_SEGMENT_PX + TAPE_SEGMENT_PX / 2;
+    tapeCtx.fillStyle = '#888';
+    tapeCtx.font = '9px Noto Sans JP, sans-serif';
+    tapeCtx.textAlign = 'center';
+    tapeCtx.fillText((seg.lengthM * 100).toFixed(2) + 'cm', x, 32);
+    tapeCtx.textAlign = 'left';
+  });
+
+  // Cut scissors marks
+  cutsMade.forEach(i => {
+    const x = CUT_ZONES[i];
+    // red cut line
+    tapeCtx.save();
+    tapeCtx.strokeStyle = '#e74c3c';
+    tapeCtx.lineWidth = 2;
+    tapeCtx.setLineDash([3, 3]);
+    tapeCtx.beginPath();
+    tapeCtx.moveTo(x, 10);
+    tapeCtx.lineTo(x, TAPE_H - 10);
+    tapeCtx.stroke();
+    tapeCtx.restore();
+    // scissors emoji-like
+    tapeCtx.font = '16px sans-serif';
+    tapeCtx.textAlign = 'center';
+    tapeCtx.fillText('✂', x, 14);
+    tapeCtx.textAlign = 'left';
+  });
+}
+
+function getTapeCutZoneAt(clientX) {
+  const rect = tapeScroll.getBoundingClientRect();
+  const scrollLeft = tapeScroll.scrollLeft;
+  const x = clientX - rect.left + scrollLeft;
+  // Find nearest cut zone (not first, not last)
+  let best = -1, bestDist = 999;
+  CUT_ZONES.forEach((cx, i) => {
+    if (i === 0 || i === CUT_ZONES.length - 1) return;
+    const d = Math.abs(x - cx);
+    if (d < bestDist && d < 18) { bestDist = d; best = i; }
+  });
+  return best;
+}
+
+function performCut(zoneIdx) {
+  if (zoneIdx < 0 || cutsMade.has(zoneIdx)) return;
+  cutsMade.add(zoneIdx);
+  drawTape();
+  updateTray();
+  updateCutBtn();
+}
+
+let tapeTouchStartX = 0;
+tapeScroll.addEventListener('touchstart', e => {
+  tapeTouchStartX = e.touches[0].clientX;
+}, {passive: true});
+tapeScroll.addEventListener('touchend', e => {
+  const dx = Math.abs(e.changedTouches[0].clientX - tapeTouchStartX);
+  if (dx < 15) {
+    // tap
+    const z = getTapeCutZoneAt(e.changedTouches[0].clientX);
+    performCut(z);
+  }
+}, {passive: true});
+tapeCanvas.addEventListener('click', e => {
+  const rect = tapeScroll.getBoundingClientRect();
+  const z = getTapeCutZoneAt(e.clientX);
+  performCut(z);
+});
+
+function getPiecesFromCuts() {
+  // sort cuts
+  const sorted = [...cutsMade].sort((a,b) => a-b);
+  if (sorted.length === 0) return [];
+  // Add implicit start and end
+  const allEdges = [0, ...sorted, CUT_ZONES.length - 1].sort((a,b)=>a-b);
+  const pieces = [];
+  for (let i = 0; i < allEdges.length - 1; i++) {
+    const from = allEdges[i];
+    const to = allEdges[i+1];
+    if (to - from < 1) continue;
+    let totalLen = 0;
+    for (let s = from; s < to && s < tapeData.length; s++) {
+      totalLen += tapeData[s].lengthM;
+    }
+    pieces.push({
+      segFrom: from, segTo: to,
+      lengthM: totalLen,
+      lengthCm: totalLen * 100,
+      pxHeight: Math.round(totalLen * TAPE_PX_PER_M)
+    });
+  }
+  return pieces;
+}
+
+const TRAY_MAX_H = 70;
+function updateTray() {
+  const pieces = getPiecesFromCuts();
+  cutPieces = pieces;
+  const tray = document.getElementById('tray');
+  tray.innerHTML = '';
+  const maxLen = Math.max(...pieces.map(p => p.lengthM));
+  pieces.forEach((p, i) => {
+    const h = Math.max(12, Math.round((p.lengthM / maxLen) * TRAY_MAX_H));
+    const el = document.createElement('div');
+    el.className = 'tray-piece';
+    el.style.height = h + 'px';
+    el.dataset.idx = i;
+    const lbl = document.createElement('div');
+    lbl.className = 'piece-label';
+    lbl.textContent = p.lengthCm.toFixed(2) + 'cm';
+    el.appendChild(lbl);
+    tray.appendChild(el);
+  });
+}
+
+function updateCutBtn() {
+  const btn = document.getElementById('btn-to-graph');
+  const pieces = getPiecesFromCuts();
+  if (pieces.length >= 3) {
+    btn.classList.add('enabled');
+  } else {
+    btn.classList.remove('enabled');
+  }
+}
+
+function goToPhase2() {
+  cutsMade.clear();
+  cutPieces = [];
+  buildCutZones();
+  drawTape();
+  updateTray();
+  updateCutBtn();
+  showPhase('phase2');
+  setStep(2);
+  document.getElementById('si-1').classList.remove('active');
+  document.getElementById('si-1').classList.add('done');
+  document.getElementById('si-2').classList.add('active');
+}
+
+document.getElementById('btn-to-graph').addEventListener('click', () => {
+  if (!document.getElementById('btn-to-graph').classList.contains('enabled')) return;
+  goToPhase3();
+});
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 3 — Graph
+// ─────────────────────────────────────────────────────────────
+const graphCanvas = document.getElementById('graphCanvas');
+const graphCtx = graphCanvas.getContext('2d');
+const graphWrapper = document.getElementById('graph-canvas-wrapper');
+
+let GW, GH;
+const GRAPH_PAD = { left: 54, right: 24, top: 24, bottom: 44 };
+let graphPlotW, graphPlotH;
+
+placedPieces = [];
+
+function resizeGraph() {
+  GW = graphWrapper.clientWidth;
+  GH = Math.round(GW * 0.72);
+  graphCanvas.width = GW;
+  graphCanvas.height = GH;
+  graphPlotW = GW - GRAPH_PAD.left - GRAPH_PAD.right;
+  graphPlotH = GH - GRAPH_PAD.top - GRAPH_PAD.bottom;
+  drawGraph();
+}
+
+function drawGraph() {
+  graphCtx.clearRect(0, 0, GW, GH);
+
+  // Graph paper background
+  graphCtx.fillStyle = '#f0f7f0';
+  graphCtx.fillRect(0, 0, GW, GH);
+
+  const pl = GRAPH_PAD.left, pt = GRAPH_PAD.top;
+  const pw = graphPlotW, ph = graphPlotH;
+
+  // Grid
+  const gridN = 10;
+  for (let i = 0; i <= gridN; i++) {
+    const x = pl + (pw / gridN) * i;
+    const y = pt + (ph / gridN) * i;
+    const isMajor = i % 5 === 0;
+    graphCtx.strokeStyle = isMajor ? '#a8d5a8' : '#c8e8c8';
+    graphCtx.lineWidth = isMajor ? 1.5 : 0.7;
+    // vertical
+    graphCtx.beginPath(); graphCtx.moveTo(x, pt); graphCtx.lineTo(x, pt+ph); graphCtx.stroke();
+    // horizontal
+    graphCtx.beginPath(); graphCtx.moveTo(pl, y); graphCtx.lineTo(pl+pw, y); graphCtx.stroke();
+  }
+
+  // Axes
+  graphCtx.strokeStyle = '#2c3e50';
+  graphCtx.lineWidth = 2;
+  graphCtx.beginPath();
+  graphCtx.moveTo(pl, pt); graphCtx.lineTo(pl, pt+ph); graphCtx.lineTo(pl+pw, pt+ph);
+  graphCtx.stroke();
+
+  // Axis labels
+  graphCtx.fillStyle = '#2c3e50';
+  graphCtx.font = `bold ${Math.round(GW*0.03)}px Noto Sans JP, sans-serif`;
+  graphCtx.textAlign = 'center';
+  graphCtx.fillText('時間 t →', pl + pw/2, pt + ph + 36);
+  graphCtx.save();
+  graphCtx.translate(16, pt + ph/2);
+  graphCtx.rotate(-Math.PI/2);
+  graphCtx.fillText('速さ v →', 0, 0);
+  graphCtx.restore();
+
+  // Placed bars
+  if (placedPieces.length === 0) {
+    graphCtx.fillStyle = '#aaa';
+    graphCtx.font = `${Math.round(GW*0.034)}px Noto Sans JP, sans-serif`;
+    graphCtx.textAlign = 'center';
+    graphCtx.fillText('テープ片をここにドラッグしよう', pl + pw/2, pt + ph/2);
+    return;
+  }
+
+  const maxLen = Math.max(...cutPieces.map(p => p.lengthM));
+  const barW = Math.min(48, pw / (placedPieces.length + 1));
+  const totalBars = placedPieces.length;
+
+  const xScale = pw / (totalBars + 1);
+  const yScale = ph / (maxLen * 1.3);
+
+  const barCenters = [];
+
+  placedPieces.forEach((p, i) => {
+    const barH = p.lengthM * yScale;
+    const bx = pl + (i + 0.5) * xScale;
+    const by = pt + ph - barH;
+
+    // Bar
+    const grad = graphCtx.createLinearGradient(bx - barW/2, by, bx + barW/2, by);
+    grad.addColorStop(0, '#f8d56b');
+    grad.addColorStop(0.5, '#f5c518');
+    grad.addColorStop(1, '#e0ad00');
+    graphCtx.fillStyle = grad;
+    graphCtx.strokeStyle = '#c4944a';
+    graphCtx.lineWidth = 1.5;
+    graphCtx.beginPath();
+    graphCtx.rect(bx - barW/2, by, barW, barH);
+    graphCtx.fill();
+    graphCtx.stroke();
+
+    // Dot lines on bar
+    graphCtx.save();
+    graphCtx.strokeStyle = 'rgba(160,100,40,0.3)';
+    graphCtx.lineWidth = 1;
+    for (let y = by + 6; y < pt+ph; y+=6) {
+      graphCtx.beginPath(); graphCtx.moveTo(bx-barW/2+2, y); graphCtx.lineTo(bx+barW/2-2, y); graphCtx.stroke();
+    }
+    graphCtx.restore();
+
+    // Bar top label
+    graphCtx.fillStyle = '#555';
+    graphCtx.font = `${Math.round(GW*0.024)}px Noto Sans JP, sans-serif`;
+    graphCtx.textAlign = 'center';
+    graphCtx.fillText(p.lengthCm.toFixed(2), bx, by - 4);
+
+    // X tick
+    graphCtx.fillStyle = '#666';
+    graphCtx.font = `${Math.round(GW*0.025)}px Noto Sans JP, sans-serif`;
+    graphCtx.fillText(`t${i+1}`, bx, pt + ph + 16);
+
+    barCenters.push({ x: bx, y: by + barH/2, lenM: p.lengthM, idx: i });
+  });
+
+  // Regression line (if >= 3)
+  if (placedPieces.length >= 3) {
+    // Each bar represents average velocity over segment: v = length/dt_cut
+    // t at midpoint of segment: t_mid = (i + 0.5) * CUT_DT
+    const pts = placedPieces.map((p, i) => ({
+      t: (i + 0.5) * CUT_DT,
+      v: p.lengthM / CUT_DT
+    }));
+    const n = pts.length;
+    const sumT = pts.reduce((s, p) => s + p.t, 0);
+    const sumV = pts.reduce((s, p) => s + p.v, 0);
+    const sumT2 = pts.reduce((s, p) => s + p.t*p.t, 0);
+    const sumTV = pts.reduce((s, p) => s + p.t*p.v, 0);
+    const slope = (n*sumTV - sumT*sumV) / (n*sumT2 - sumT*sumT);
+    const intercept = (sumV - slope*sumT) / n;
+
+    // Draw regression
+    const tMin = pts[0].t - CUT_DT/2;
+    const tMax = pts[pts.length-1].t + CUT_DT/2;
+    const vMin = slope*tMin + intercept;
+    const vMax = slope*tMax + intercept;
+
+    // Convert to canvas coords
+    const tToX = t => pl + (t / ((totalBars + 1) * CUT_DT)) * pw;
+    const vToY = v => pt + ph - v * yScale * CUT_DT;
+
+    const x1 = tToX(tMin), y1 = vToY(vMin);
+    const x2 = tToX(tMax), y2 = vToY(vMax);
+
+    graphCtx.save();
+    graphCtx.strokeStyle = '#e74c3c';
+    graphCtx.lineWidth = 2.5;
+    graphCtx.setLineDash([8, 5]);
+    graphCtx.beginPath();
+    graphCtx.moveTo(x1, y1);
+    graphCtx.lineTo(x2, y2);
+    graphCtx.stroke();
+    graphCtx.restore();
+
+    // Show result
+    const measuredA = slope;
+    const theoryA = g * Math.sin(angleDeg * Math.PI / 180);
+    document.getElementById('res-measured').textContent = measuredA.toFixed(3) + ' m/s²';
+    document.getElementById('res-theory').textContent = theoryA.toFixed(3) + ' m/s²';
+    document.getElementById('res-angle').textContent = Math.round(angleDeg) + '°';
+    document.getElementById('result-box').classList.add('show');
+  }
+}
+
+// ─── Graph tray setup ───────────────────────────────────────
+function buildGraphTray() {
+  const gt = document.getElementById('graph-tray');
+  gt.innerHTML = '';
+  placedPieces = [];
+  const maxLen = Math.max(...cutPieces.map(p => p.lengthM));
+  cutPieces.forEach((p, i) => {
+    const h = Math.max(12, Math.round((p.lengthM / maxLen) * TRAY_MAX_H));
+    const el = document.createElement('div');
+    el.className = 'graph-tray-piece';
+    el.style.height = h + 'px';
+    el.dataset.pieceIdx = i;
+    gt.appendChild(el);
+  });
+}
+
+// ─── Drag & Drop for graph ──────────────────────────────────
+const dragGhost = document.getElementById('drag-ghost');
+let draggingPiece = null;
+let draggingPieceIdx = -1;
+
+function startDrag(el, clientX, clientY) {
+  draggingPieceIdx = parseInt(el.dataset.pieceIdx);
+  draggingPiece = cutPieces[draggingPieceIdx];
+  if (!draggingPiece) return;
+  const maxLen = Math.max(...cutPieces.map(p => p.lengthM));
+  const h = Math.max(12, Math.round((draggingPiece.lengthM / maxLen) * TRAY_MAX_H));
+  dragGhost.style.width = '32px';
+  dragGhost.style.height = h + 'px';
+  dragGhost.style.display = 'block';
+  moveDragGhost(clientX, clientY);
+}
+
+function moveDragGhost(clientX, clientY) {
+  dragGhost.style.left = (clientX - 16) + 'px';
+  dragGhost.style.top = (clientY - parseInt(dragGhost.style.height)/2) + 'px';
+}
+
+function endDrag(clientX, clientY) {
+  dragGhost.style.display = 'none';
+  if (!draggingPiece) return;
+  // Check if dropped on graph canvas
+  const rect = graphCanvas.getBoundingClientRect();
+  if (clientX >= rect.left && clientX <= rect.right &&
+      clientY >= rect.top && clientY <= rect.bottom) {
+    // Add to placed pieces (only if not already there)
+    if (!placedPieces.find(p => p === draggingPiece)) {
+      placedPieces.push(draggingPiece);
+    }
+    drawGraph();
+  }
+  draggingPiece = null;
+  draggingPieceIdx = -1;
+}
+
+document.getElementById('graph-tray').addEventListener('touchstart', e => {
+  const el = e.target.closest('.graph-tray-piece');
+  if (!el) return;
+  startDrag(el, e.touches[0].clientX, e.touches[0].clientY);
+  e.preventDefault();
+}, {passive: false});
+
+document.addEventListener('touchmove', e => {
+  if (!draggingPiece) return;
+  moveDragGhost(e.touches[0].clientX, e.touches[0].clientY);
+  e.preventDefault();
+}, {passive: false});
+
+document.addEventListener('touchend', e => {
+  if (!draggingPiece) return;
+  endDrag(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+}, {passive: true});
+
+document.getElementById('graph-tray').addEventListener('mousedown', e => {
+  const el = e.target.closest('.graph-tray-piece');
+  if (!el) return;
+  startDrag(el, e.clientX, e.clientY);
+}, {passive: true});
+
+document.addEventListener('mousemove', e => {
+  if (!draggingPiece) return;
+  moveDragGhost(e.clientX, e.clientY);
+}, {passive: true});
+
+document.addEventListener('mouseup', e => {
+  if (!draggingPiece) return;
+  endDrag(e.clientX, e.clientY);
+}, {passive: true});
+
+function goToPhase3() {
+  buildGraphTray();
+  showPhase('phase3');
+  setStep(3);
+  document.getElementById('si-2').classList.remove('active');
+  document.getElementById('si-2').classList.add('done');
+  document.getElementById('si-3').classList.add('active');
+  document.getElementById('result-box').classList.remove('show');
+  setTimeout(() => {
+    resizeGraph();
+  }, 50);
+}
+
+// ─── Reset ──────────────────────────────────────────────────
+document.getElementById('btn-reset').addEventListener('click', () => {
+  angleDeg = 30;
+  tapeData = [];
+  cutPieces = [];
+  cutsMade.clear();
+  placedPieces = [];
+  document.getElementById('angle-display').innerHTML = '30<span>°</span>';
+  showPhase('phase1');
+  setStep(1);
+  ['si-1','si-2','si-3'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('active','done');
+  });
+  document.getElementById('si-1').classList.add('active');
+  document.getElementById('sc-1').classList.remove('done');
+  document.getElementById('sc-2').classList.remove('done');
+  drawIncline();
+});
+
+// ─── Phase switcher ──────────────────────────────────────────
+function showPhase(id) {
+  document.querySelectorAll('.phase').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ─── Init ───────────────────────────────────────────────────
+resizeIncline();
+</script>
+</body>
+</html>
