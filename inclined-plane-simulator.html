@@ -151,12 +151,29 @@ body {
   border: 1px solid #ffc107;
   border-radius: 8px;
   padding: 8px 12px;
-  margin: 10px 0;
+  margin: 10px 0 6px;
   text-align: center;
 }
 
+#btn-undo-cut {
+  display: block;
+  margin: 0 auto 10px;
+  padding: 8px 28px;
+  background: #fff;
+  color: #e74c3c;
+  border: 2px solid #e74c3c;
+  border-radius: 50px;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+#btn-undo-cut:disabled { opacity: 0.3; cursor: default; }
+#btn-undo-cut:not(:disabled):active { background: #fdf0f0; }
+
 /* tray */
-#tray-label { font-size: 14px; font-weight: 700; color: #555; margin: 14px 0 8px; }
+#tray-label { font-size: 14px; font-weight: 700; color: #555; margin: 8px 0 8px; }
 #tray {
   display: flex;
   gap: 8px;
@@ -232,17 +249,17 @@ body {
 #graph-tray-label { font-size: 14px; font-weight: 700; color: #555; }
 #graph-tray {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  min-height: 60px;
-  padding: 8px;
+  min-height: 80px;
+  padding: 10px;
   background: #fff;
   border: 2px dashed #bbb;
   border-radius: 10px;
   align-items: flex-end;
 }
 .graph-tray-piece {
-  width: 32px;
+  width: 48px;
   cursor: grab;
   flex-shrink: 0;
   border-radius: 3px;
@@ -285,7 +302,7 @@ body {
 
 #btn-reset {
   display: block;
-  margin: 16px auto 32px;
+  margin: 4px auto 32px;
   padding: 12px 40px;
   background: #fff;
   color: #666;
@@ -358,6 +375,7 @@ body {
     <canvas id="tapeCanvas" height="100"></canvas>
   </div>
   <div class="cut-instruction">📌 5打点ごとの点線でカット。3片以上切ったら次へ進めます。</div>
+  <button id="btn-undo-cut" disabled>↩ 1つ戻す</button>
   <div id="tray-label">🗂 カットしたテープ</div>
   <div id="tray"></div>
   <button id="btn-to-graph">グラフへ →</button>
@@ -366,10 +384,8 @@ body {
 <!-- PHASE 3 -->
 <div class="phase" id="phase3">
   <h2>グラフ用紙にテープを貼ろう</h2>
-  <p class="subtitle">トレーのテープをグラフ用紙にドラッグして並べよう</p>
+  <p class="subtitle">下のトレーのテープをグラフ用紙にドラッグして並べよう</p>
   <div id="graph-area">
-    <div id="graph-tray-label">🗂 テープ片（ドラッグしてグラフに貼る）</div>
-    <div id="graph-tray"></div>
     <div id="graph-canvas-wrapper">
       <canvas id="graphCanvas"></canvas>
     </div>
@@ -389,6 +405,8 @@ body {
         <span style="font-weight:700" id="res-angle">―</span>
       </div>
     </div>
+    <div id="graph-tray-label">🗂 テープ片（ドラッグしてグラフに貼る）</div>
+    <div id="graph-tray"></div>
     <button id="btn-reset">🔄 最初からやり直す</button>
   </div>
 </div>
@@ -400,17 +418,22 @@ body {
 'use strict';
 
 // ─── Constants ──────────────────────────────────────────────
-const g = 9.8;        // m/s²
-const HZ = 60;        // 打点周波数
-const DT = 1 / HZ;   // 1打点 = 1/60 s
-const CUT_DOTS = 5;   // 5打点でカット
-const CUT_DT = CUT_DOTS * DT;  // 1/12 s
+const g = 9.8;
+const HZ = 60;
+const DT = 1 / HZ;
+const CUT_DOTS = 5;
+const CUT_DT = CUT_DOTS * DT;
+const TAPE_LEFT = 40;
+const TAPE_AREA = 500;   // pixel width for the physics-scaled dot area
+const TRAY_MAX_H = 70;   // phase2 tray max bar height (px)
+const GRAPH_TRAY_MAX_H = 110; // phase3 tray max bar height (px)
 
 // ─── State ──────────────────────────────────────────────────
 let angleDeg = 30;
-let tapeData = [];       // [{x_start, x_end, length_m}]  raw 60Hz dots positions
-let cutPieces = [];      // [{index, lengthPx, lengthM, lengthCm}]
-let placedPieces = [];   // pieces placed on graph (in order)
+let dotPositions = []; // raw meter positions of each 1/60s dot
+let tapeData = [];
+let cutPieces = [];
+let placedPieces = [];
 
 // ─── Step indicator ─────────────────────────────────────────
 function setStep(n) {
@@ -442,16 +465,15 @@ function resizeIncline() {
   drawIncline();
 }
 
-// Drag state
 let isDraggingIncline = false;
-const baseX_frac = 0.08; // base left point
+const baseX_frac = 0.08;
 const baseY_frac = 0.88;
 
 function getAngleFromPoint(cx, cy) {
   const bx = baseX_frac * incW;
   const by = baseY_frac * incH;
   const dx = cx - bx;
-  const dy = by - cy;  // upward
+  const dy = by - cy;
   if (dx <= 0) return angleDeg;
   let a = Math.atan2(dy, dx) * 180 / Math.PI;
   return Math.max(5, Math.min(60, a));
@@ -465,12 +487,36 @@ function getTopPoint() {
   return { x: bx + len * Math.cos(rad), y: by - len * Math.sin(rad) };
 }
 
+function drawCartOnCtx(ctx, cx, cy, rad, scale) {
+  // scale: 1.0 = normal size (fits ~30px wide)
+  const hw = 16 * scale, hh = 10 * scale, wr = 5 * scale;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-rad);
+  // body
+  ctx.fillStyle = '#3498db';
+  ctx.fillRect(-hw, -hh, hw * 2, hh + 4 * scale);
+  ctx.strokeStyle = '#2980b9';
+  ctx.lineWidth = 1.5 * scale;
+  ctx.strokeRect(-hw, -hh, hw * 2, hh + 4 * scale);
+  // wheels
+  [[-hw * 0.55, 4 * scale],[hw * 0.55, 4 * scale]].forEach(([wx, wy]) => {
+    ctx.beginPath();
+    ctx.arc(wx, wy, wr, 0, Math.PI * 2);
+    ctx.fillStyle = '#2c3e50'; ctx.fill();
+    ctx.beginPath();
+    ctx.arc(wx, wy, wr * 0.4, 0, Math.PI * 2);
+    ctx.fillStyle = '#aaa'; ctx.fill();
+  });
+  ctx.restore();
+}
+
 function drawIncline() {
   const W = incW, H = incH;
   incCtx.clearRect(0, 0, W, H);
 
   // Sky gradient
-  const sky = incCtx.createLinearGradient(0,0,0,H);
+  const sky = incCtx.createLinearGradient(0, 0, 0, H);
   sky.addColorStop(0, '#d0e8ff');
   sky.addColorStop(1, '#e8f4e8');
   incCtx.fillStyle = sky;
@@ -478,6 +524,7 @@ function drawIncline() {
 
   const bx = baseX_frac * W, by = baseY_frac * H;
   const tp = getTopPoint();
+  const rad = angleDeg * Math.PI / 180;
 
   // Ground
   incCtx.beginPath();
@@ -495,16 +542,15 @@ function drawIncline() {
   incCtx.lineWidth = 6;
   incCtx.stroke();
 
-  // Wood texture incline board
+  // Incline board (wood)
   incCtx.save();
   incCtx.beginPath();
   const thickness = 10;
-  const rad = angleDeg * Math.PI / 180;
   const nx = Math.sin(rad), ny = Math.cos(rad);
   incCtx.moveTo(bx, by);
   incCtx.lineTo(tp.x, tp.y);
-  incCtx.lineTo(tp.x - nx*thickness, tp.y + ny*thickness);
-  incCtx.lineTo(bx - nx*thickness, by + ny*thickness);
+  incCtx.lineTo(tp.x - nx * thickness, tp.y + ny * thickness);
+  incCtx.lineTo(bx - nx * thickness, by + ny * thickness);
   incCtx.closePath();
   const woodGrad = incCtx.createLinearGradient(bx, by, tp.x, tp.y);
   woodGrad.addColorStop(0, '#c8903a');
@@ -514,6 +560,23 @@ function drawIncline() {
   incCtx.fill();
   incCtx.strokeStyle = '#8B6914';
   incCtx.lineWidth = 2;
+  incCtx.stroke();
+  incCtx.restore();
+
+  // Cart at top of incline (static, ready to slide)
+  const cartFrac = 0.82;
+  const cartX = bx + (tp.x - bx) * cartFrac;
+  const cartY = by + (tp.y - by) * cartFrac;
+  const cartScale = Math.max(0.7, W / 500);
+  drawCartOnCtx(incCtx, cartX, cartY, rad, cartScale);
+
+  // Tape from cart down to base
+  incCtx.save();
+  incCtx.strokeStyle = '#f5c518';
+  incCtx.lineWidth = 3;
+  incCtx.beginPath();
+  incCtx.moveTo(bx + 4, by - 4);
+  incCtx.lineTo(cartX - 16 * cartScale * Math.cos(rad), cartY + 16 * cartScale * Math.sin(rad));
   incCtx.stroke();
   incCtx.restore();
 
@@ -527,7 +590,7 @@ function drawIncline() {
   // Angle label
   const midAngle = -angleDeg * Math.PI / 360;
   incCtx.fillStyle = '#e74c3c';
-  incCtx.font = `bold ${Math.round(W*0.035)}px Noto Sans JP, sans-serif`;
+  incCtx.font = `bold ${Math.round(W * 0.035)}px Noto Sans JP, sans-serif`;
   incCtx.fillText(`${Math.round(angleDeg)}°`, bx + 42 * Math.cos(midAngle) - 10, by + 42 * Math.sin(midAngle) + 4);
 
   // Drag handle at top
@@ -572,15 +635,14 @@ function onInclinePointerMove(e) {
   drawIncline();
   e.preventDefault();
 }
-function onInclinePointerUp(e) { isDraggingIncline = false; }
+function onInclinePointerUp() { isDraggingIncline = false; }
 
-inclineCanvas.addEventListener('touchstart', onInclinePointerDown, {passive:false});
-inclineCanvas.addEventListener('touchmove', onInclinePointerMove, {passive:false});
+inclineCanvas.addEventListener('touchstart', onInclinePointerDown, {passive: false});
+inclineCanvas.addEventListener('touchmove', onInclinePointerMove, {passive: false});
 inclineCanvas.addEventListener('touchend', onInclinePointerUp);
 inclineCanvas.addEventListener('mousedown', onInclinePointerDown);
 window.addEventListener('mousemove', onInclinePointerMove);
 window.addEventListener('mouseup', onInclinePointerUp);
-
 window.addEventListener('resize', resizeIncline);
 resizeIncline();
 
@@ -592,16 +654,15 @@ const animCanvas = document.getElementById('anim-canvas');
 const animCtx = animCanvas.getContext('2d');
 const animMsg = document.getElementById('anim-msg');
 
-function generateTapeData(angleDeg) {
-  const a = g * Math.sin(angleDeg * Math.PI / 180);
-  // Simulate cart from rest; record positions at each 1/60 s tick
-  // Let's record enough ticks for a good tape: ~2 seconds = 120 dots
+function generateTapeData(deg) {
+  const a = g * Math.sin(deg * Math.PI / 180);
   const totalDots = 120;
   const positions = [];
   for (let i = 0; i < totalDots; i++) {
     const t = i * DT;
-    positions.push(0.5 * a * t * t); // meters
+    positions.push(0.5 * a * t * t);
   }
+  dotPositions = positions.slice();
   tapeData = [];
   for (let i = 0; i + CUT_DOTS < totalDots; i += CUT_DOTS) {
     const lenM = positions[i + CUT_DOTS] - positions[i];
@@ -611,10 +672,11 @@ function generateTapeData(angleDeg) {
 
 let animRAF = null;
 function runAnimation() {
+  animMsg.textContent = '台車が走っています...';
   animOverlay.classList.add('show');
   const AW = animCanvas.width, AH = animCanvas.height;
   const a = g * Math.sin(angleDeg * Math.PI / 180);
-  const duration = 1400; // ms
+  const duration = 1600;
   let start = null;
 
   function frame(ts) {
@@ -622,10 +684,9 @@ function runAnimation() {
     const elapsed = ts - start;
     const frac = Math.min(elapsed / duration, 1);
 
-    // Draw scene
     animCtx.clearRect(0, 0, AW, AH);
-    // bg
-    const bg = animCtx.createLinearGradient(0,0,0,AH);
+
+    const bg = animCtx.createLinearGradient(0, 0, 0, AH);
     bg.addColorStop(0, '#d0e8ff');
     bg.addColorStop(1, '#e8f4e8');
     animCtx.fillStyle = bg;
@@ -648,51 +709,42 @@ function runAnimation() {
     const th = 8, nx = Math.sin(rad), ny = Math.cos(rad);
     animCtx.moveTo(bx, by);
     animCtx.lineTo(tpx, tpy);
-    animCtx.lineTo(tpx - nx*th, tpy + ny*th);
-    animCtx.lineTo(bx - nx*th, by + ny*th);
+    animCtx.lineTo(tpx - nx * th, tpy + ny * th);
+    animCtx.lineTo(bx - nx * th, by + ny * th);
     animCtx.closePath();
     animCtx.fillStyle = '#c8903a'; animCtx.fill();
     animCtx.strokeStyle = '#8B6914'; animCtx.lineWidth = 1.5; animCtx.stroke();
     animCtx.restore();
 
-    // Cart position (physics: s = 0.5*a*t², t in seconds, display fraction)
-    // map frac to position along incline
-    const cartT = frac * 1.4;
-    const cartS = 0.5 * a * cartT * cartT; // meters
-    const maxS = 0.5 * a * 1.96;
+    // Cart slides DOWN: starts at top (tpx,tpy), moves to base (bx,by)
+    const cartT = frac * 1.6;
+    const cartS = 0.5 * a * cartT * cartT;
+    const maxS = 0.5 * a * (1.6 * 1.6);
     const cartFrac = Math.min(cartS / maxS, 1) * 0.88;
-    const cx = bx + (AW - 60) * cartFrac * Math.cos(rad);
-    const cy = by - (AW - 60) * cartFrac * Math.sin(rad);
+    const cx = tpx - (AW - 60) * cartFrac * Math.cos(rad);
+    const cy = tpy + (AW - 60) * cartFrac * Math.sin(rad);
 
-    // Cart body
-    animCtx.save();
-    animCtx.translate(cx, cy);
-    animCtx.rotate(-rad);
-    animCtx.fillStyle = '#3498db';
-    animCtx.fillRect(-16, -10, 32, 14);
-    animCtx.strokeStyle = '#2980b9'; animCtx.lineWidth = 1.5; animCtx.strokeRect(-16,-10,32,14);
-    // wheels
-    [[-10, 4],[10, 4]].forEach(([wx, wy]) => {
-      animCtx.beginPath();
-      animCtx.arc(wx, wy, 5, 0, Math.PI*2);
-      animCtx.fillStyle = '#2c3e50'; animCtx.fill();
-      animCtx.beginPath();
-      animCtx.arc(wx, wy, 2, 0, Math.PI*2);
-      animCtx.fillStyle = '#aaa'; animCtx.fill();
-    });
-    animCtx.restore();
-
-    // Tape trailing
-    if (frac > 0.05) {
+    // Tape trailing from cart back UP to timer at top
+    if (frac > 0.02) {
       animCtx.save();
       animCtx.strokeStyle = '#f5c518';
       animCtx.lineWidth = 4;
       animCtx.beginPath();
-      animCtx.moveTo(bx + 4, by - 5);
-      animCtx.lineTo(cx - 16 * Math.cos(rad), cy + 16 * Math.sin(rad));
+      animCtx.moveTo(tpx, tpy);
+      animCtx.lineTo(cx + 16 * Math.cos(rad), cy - 16 * Math.sin(rad));
       animCtx.stroke();
       animCtx.restore();
     }
+
+    drawCartOnCtx(animCtx, cx, cy, rad, 1.0);
+
+    // Timer device at top
+    animCtx.save();
+    animCtx.translate(tpx, tpy - 14);
+    animCtx.fillStyle = '#555';
+    animCtx.fillRect(-12, -8, 24, 16);
+    animCtx.strokeStyle = '#333'; animCtx.lineWidth = 1; animCtx.strokeRect(-12, -8, 24, 16);
+    animCtx.restore();
 
     if (frac < 1) {
       animRAF = requestAnimationFrame(frame);
@@ -719,26 +771,29 @@ const tapeCanvas = document.getElementById('tapeCanvas');
 const tapeCtx = tapeCanvas.getContext('2d');
 const tapeScroll = document.getElementById('tape-scroll-container');
 
-const TAPE_H = 100;
-const DOT_ROW = 58;    // y for dots
-const TAPE_PX_PER_M = 9000; // pixels per meter on tape
-const TAPE_SEGMENT_PX = 28; // px per 5-dot segment (fixed display width)
-const CUT_ZONES = [];  // x positions of cut lines
-let cutsMade = new Set();   // which cut zone indices have been cut
+const TAPE_H = 110;
+const DOT_ROW = 65;
+const CUT_ZONES = [];
+let cutsMade = new Set();
+
+function dotToX(dotIdx) {
+  const totalDots = tapeData.length * CUT_DOTS;
+  const lastPos = dotPositions[totalDots] !== undefined ? dotPositions[totalDots] : dotPositions[dotPositions.length - 1];
+  if (lastPos === 0) return TAPE_LEFT;
+  return TAPE_LEFT + (dotPositions[dotIdx] / lastPos) * TAPE_AREA;
+}
 
 function buildCutZones() {
   CUT_ZONES.length = 0;
-  // Each segment is CUT_DOTS dots wide
   const totalSegs = tapeData.length;
-  // Tape starts at x=40, each segment = TAPE_SEGMENT_PX px
   for (let i = 0; i <= totalSegs; i++) {
-    CUT_ZONES.push(40 + i * TAPE_SEGMENT_PX);
+    CUT_ZONES.push(dotToX(i * CUT_DOTS));
   }
 }
 
 function drawTape() {
   const totalSegs = tapeData.length;
-  const tapeW = 40 + totalSegs * TAPE_SEGMENT_PX + 40;
+  const tapeW = TAPE_LEFT + TAPE_AREA + 40;
   tapeCanvas.width = tapeW;
   tapeCanvas.height = TAPE_H;
 
@@ -751,11 +806,11 @@ function drawTape() {
   tapeCtx.strokeStyle = '#c4944a';
   tapeCtx.lineWidth = 1.5;
   tapeCtx.beginPath();
-  tapeCtx.rect(30, 15, tapeW - 60, TAPE_H - 30);
+  tapeCtx.rect(TAPE_LEFT - 10, 18, TAPE_AREA + 20, TAPE_H - 36);
   tapeCtx.fill();
   tapeCtx.stroke();
 
-  // Segment guide lines (dashed)
+  // Segment guide lines (dashed) between uncut zones
   CUT_ZONES.forEach((x, i) => {
     if (i === 0 || i === CUT_ZONES.length - 1) return;
     if (cutsMade.has(i)) return;
@@ -764,16 +819,16 @@ function drawTape() {
     tapeCtx.strokeStyle = 'rgba(180,130,50,0.35)';
     tapeCtx.lineWidth = 1;
     tapeCtx.beginPath();
-    tapeCtx.moveTo(x, 15);
-    tapeCtx.lineTo(x, TAPE_H - 15);
+    tapeCtx.moveTo(x, 18);
+    tapeCtx.lineTo(x, TAPE_H - 18);
     tapeCtx.stroke();
     tapeCtx.restore();
   });
 
-  // Dots (60Hz)
+  // Dots (60Hz) — physics-based spacing
   const totalDots = totalSegs * CUT_DOTS + 1;
   for (let d = 0; d < totalDots; d++) {
-    const x = 40 + d * (TAPE_SEGMENT_PX / CUT_DOTS);
+    const x = dotToX(d);
     const isBig = d % CUT_DOTS === 0;
     tapeCtx.beginPath();
     tapeCtx.arc(x, DOT_ROW, isBig ? 3.5 : 2, 0, Math.PI * 2);
@@ -781,33 +836,33 @@ function drawTape() {
     tapeCtx.fill();
   }
 
-  // Segment length labels
+  // Segment length labels (only if segment wide enough)
   tapeData.forEach((seg, i) => {
-    const x = 40 + i * TAPE_SEGMENT_PX + TAPE_SEGMENT_PX / 2;
+    const x0 = CUT_ZONES[i], x1 = CUT_ZONES[i + 1];
+    if (x1 - x0 < 22) return;
+    const xc = (x0 + x1) / 2;
     tapeCtx.fillStyle = '#888';
     tapeCtx.font = '9px Noto Sans JP, sans-serif';
     tapeCtx.textAlign = 'center';
-    tapeCtx.fillText((seg.lengthM * 100).toFixed(2) + 'cm', x, 32);
+    tapeCtx.fillText((seg.lengthM * 100).toFixed(2) + 'cm', xc, 36);
     tapeCtx.textAlign = 'left';
   });
 
   // Cut scissors marks
   cutsMade.forEach(i => {
     const x = CUT_ZONES[i];
-    // red cut line
     tapeCtx.save();
     tapeCtx.strokeStyle = '#e74c3c';
     tapeCtx.lineWidth = 2;
     tapeCtx.setLineDash([3, 3]);
     tapeCtx.beginPath();
-    tapeCtx.moveTo(x, 10);
-    tapeCtx.lineTo(x, TAPE_H - 10);
+    tapeCtx.moveTo(x, 12);
+    tapeCtx.lineTo(x, TAPE_H - 12);
     tapeCtx.stroke();
     tapeCtx.restore();
-    // scissors emoji-like
     tapeCtx.font = '16px sans-serif';
     tapeCtx.textAlign = 'center';
-    tapeCtx.fillText('✂', x, 14);
+    tapeCtx.fillText('✂', x, 16);
     tapeCtx.textAlign = 'left';
   });
 }
@@ -816,12 +871,12 @@ function getTapeCutZoneAt(clientX) {
   const rect = tapeScroll.getBoundingClientRect();
   const scrollLeft = tapeScroll.scrollLeft;
   const x = clientX - rect.left + scrollLeft;
-  // Find nearest cut zone (not first, not last)
   let best = -1, bestDist = 999;
   CUT_ZONES.forEach((cx, i) => {
     if (i === 0 || i === CUT_ZONES.length - 1) return;
+    if (i === 1) return; // zone 1 is pre-cut, don't allow re-cutting
     const d = Math.abs(x - cx);
-    if (d < bestDist && d < 18) { bestDist = d; best = i; }
+    if (d < bestDist && d < 30) { bestDist = d; best = i; }
   });
   return best;
 }
@@ -832,7 +887,25 @@ function performCut(zoneIdx) {
   drawTape();
   updateTray();
   updateCutBtn();
+  updateUndoBtn();
 }
+
+function undoLastCut() {
+  const removable = [...cutsMade].sort((a,b) => a-b).filter(i => i !== 1);
+  if (removable.length === 0) return;
+  cutsMade.delete(removable[removable.length - 1]);
+  drawTape();
+  updateTray();
+  updateCutBtn();
+  updateUndoBtn();
+}
+
+function updateUndoBtn() {
+  const removable = [...cutsMade].filter(i => i !== 1);
+  document.getElementById('btn-undo-cut').disabled = removable.length === 0;
+}
+
+document.getElementById('btn-undo-cut').addEventListener('click', undoLastCut);
 
 let tapeTouchStartX = 0;
 tapeScroll.addEventListener('touchstart', e => {
@@ -841,27 +914,23 @@ tapeScroll.addEventListener('touchstart', e => {
 tapeScroll.addEventListener('touchend', e => {
   const dx = Math.abs(e.changedTouches[0].clientX - tapeTouchStartX);
   if (dx < 15) {
-    // tap
     const z = getTapeCutZoneAt(e.changedTouches[0].clientX);
     performCut(z);
   }
 }, {passive: true});
 tapeCanvas.addEventListener('click', e => {
-  const rect = tapeScroll.getBoundingClientRect();
   const z = getTapeCutZoneAt(e.clientX);
   performCut(z);
 });
 
 function getPiecesFromCuts() {
-  // sort cuts
   const sorted = [...cutsMade].sort((a,b) => a-b);
   if (sorted.length === 0) return [];
-  // Add implicit start and end
-  const allEdges = [0, ...sorted, CUT_ZONES.length - 1].sort((a,b)=>a-b);
+  const allEdges = [0, ...sorted, CUT_ZONES.length - 1].sort((a,b) => a-b);
   const pieces = [];
   for (let i = 0; i < allEdges.length - 1; i++) {
     const from = allEdges[i];
-    const to = allEdges[i+1];
+    const to = allEdges[i + 1];
     if (to - from < 1) continue;
     let totalLen = 0;
     for (let s = from; s < to && s < tapeData.length; s++) {
@@ -870,19 +939,18 @@ function getPiecesFromCuts() {
     pieces.push({
       segFrom: from, segTo: to,
       lengthM: totalLen,
-      lengthCm: totalLen * 100,
-      pxHeight: Math.round(totalLen * TAPE_PX_PER_M)
+      lengthCm: totalLen * 100
     });
   }
   return pieces;
 }
 
-const TRAY_MAX_H = 70;
 function updateTray() {
   const pieces = getPiecesFromCuts();
   cutPieces = pieces;
   const tray = document.getElementById('tray');
   tray.innerHTML = '';
+  if (pieces.length === 0) return;
   const maxLen = Math.max(...pieces.map(p => p.lengthM));
   pieces.forEach((p, i) => {
     const h = Math.max(12, Math.round((p.lengthM / maxLen) * TRAY_MAX_H));
@@ -899,22 +967,19 @@ function updateTray() {
 }
 
 function updateCutBtn() {
-  const btn = document.getElementById('btn-to-graph');
   const pieces = getPiecesFromCuts();
-  if (pieces.length >= 3) {
-    btn.classList.add('enabled');
-  } else {
-    btn.classList.remove('enabled');
-  }
+  document.getElementById('btn-to-graph').classList.toggle('enabled', pieces.length >= 3);
 }
 
 function goToPhase2() {
   cutsMade.clear();
+  cutsMade.add(1); // pre-cut the first (v≈0) segment
   cutPieces = [];
   buildCutZones();
   drawTape();
   updateTray();
   updateCutBtn();
+  updateUndoBtn();
   showPhase('phase2');
   setStep(2);
   document.getElementById('si-1').classList.remove('active');
@@ -953,7 +1018,6 @@ function resizeGraph() {
 function drawGraph() {
   graphCtx.clearRect(0, 0, GW, GH);
 
-  // Graph paper background
   graphCtx.fillStyle = '#f0f7f0';
   graphCtx.fillRect(0, 0, GW, GH);
 
@@ -968,55 +1032,48 @@ function drawGraph() {
     const isMajor = i % 5 === 0;
     graphCtx.strokeStyle = isMajor ? '#a8d5a8' : '#c8e8c8';
     graphCtx.lineWidth = isMajor ? 1.5 : 0.7;
-    // vertical
-    graphCtx.beginPath(); graphCtx.moveTo(x, pt); graphCtx.lineTo(x, pt+ph); graphCtx.stroke();
-    // horizontal
-    graphCtx.beginPath(); graphCtx.moveTo(pl, y); graphCtx.lineTo(pl+pw, y); graphCtx.stroke();
+    graphCtx.beginPath(); graphCtx.moveTo(x, pt); graphCtx.lineTo(x, pt + ph); graphCtx.stroke();
+    graphCtx.beginPath(); graphCtx.moveTo(pl, y); graphCtx.lineTo(pl + pw, y); graphCtx.stroke();
   }
 
   // Axes
   graphCtx.strokeStyle = '#2c3e50';
   graphCtx.lineWidth = 2;
   graphCtx.beginPath();
-  graphCtx.moveTo(pl, pt); graphCtx.lineTo(pl, pt+ph); graphCtx.lineTo(pl+pw, pt+ph);
+  graphCtx.moveTo(pl, pt); graphCtx.lineTo(pl, pt + ph); graphCtx.lineTo(pl + pw, pt + ph);
   graphCtx.stroke();
 
-  // Axis labels
+  // Labels
   graphCtx.fillStyle = '#2c3e50';
-  graphCtx.font = `bold ${Math.round(GW*0.03)}px Noto Sans JP, sans-serif`;
+  graphCtx.font = `bold ${Math.round(GW * 0.03)}px Noto Sans JP, sans-serif`;
   graphCtx.textAlign = 'center';
-  graphCtx.fillText('時間 t →', pl + pw/2, pt + ph + 36);
+  graphCtx.fillText('時間 t →', pl + pw / 2, pt + ph + 36);
   graphCtx.save();
-  graphCtx.translate(16, pt + ph/2);
-  graphCtx.rotate(-Math.PI/2);
+  graphCtx.translate(16, pt + ph / 2);
+  graphCtx.rotate(-Math.PI / 2);
   graphCtx.fillText('速さ v →', 0, 0);
   graphCtx.restore();
 
-  // Placed bars
   if (placedPieces.length === 0) {
     graphCtx.fillStyle = '#aaa';
-    graphCtx.font = `${Math.round(GW*0.034)}px Noto Sans JP, sans-serif`;
+    graphCtx.font = `${Math.round(GW * 0.034)}px Noto Sans JP, sans-serif`;
     graphCtx.textAlign = 'center';
-    graphCtx.fillText('テープ片をここにドラッグしよう', pl + pw/2, pt + ph/2);
+    graphCtx.fillText('下のトレーからテープをドラッグしよう', pl + pw / 2, pt + ph / 2);
     return;
   }
 
   const maxLen = Math.max(...cutPieces.map(p => p.lengthM));
-  const barW = Math.min(48, pw / (placedPieces.length + 1));
   const totalBars = placedPieces.length;
-
+  const barW = Math.min(56, pw / (totalBars + 1));
   const xScale = pw / (totalBars + 1);
   const yScale = ph / (maxLen * 1.3);
-
-  const barCenters = [];
 
   placedPieces.forEach((p, i) => {
     const barH = p.lengthM * yScale;
     const bx = pl + (i + 0.5) * xScale;
     const by = pt + ph - barH;
 
-    // Bar
-    const grad = graphCtx.createLinearGradient(bx - barW/2, by, bx + barW/2, by);
+    const grad = graphCtx.createLinearGradient(bx - barW / 2, by, bx + barW / 2, by);
     grad.addColorStop(0, '#f8d56b');
     grad.addColorStop(0.5, '#f5c518');
     grad.addColorStop(1, '#e0ad00');
@@ -1024,37 +1081,30 @@ function drawGraph() {
     graphCtx.strokeStyle = '#c4944a';
     graphCtx.lineWidth = 1.5;
     graphCtx.beginPath();
-    graphCtx.rect(bx - barW/2, by, barW, barH);
+    graphCtx.rect(bx - barW / 2, by, barW, barH);
     graphCtx.fill();
     graphCtx.stroke();
 
-    // Dot lines on bar
     graphCtx.save();
     graphCtx.strokeStyle = 'rgba(160,100,40,0.3)';
     graphCtx.lineWidth = 1;
-    for (let y = by + 6; y < pt+ph; y+=6) {
-      graphCtx.beginPath(); graphCtx.moveTo(bx-barW/2+2, y); graphCtx.lineTo(bx+barW/2-2, y); graphCtx.stroke();
+    for (let y = by + 6; y < pt + ph; y += 6) {
+      graphCtx.beginPath(); graphCtx.moveTo(bx - barW / 2 + 2, y); graphCtx.lineTo(bx + barW / 2 - 2, y); graphCtx.stroke();
     }
     graphCtx.restore();
 
-    // Bar top label
     graphCtx.fillStyle = '#555';
-    graphCtx.font = `${Math.round(GW*0.024)}px Noto Sans JP, sans-serif`;
+    graphCtx.font = `${Math.round(GW * 0.024)}px Noto Sans JP, sans-serif`;
     graphCtx.textAlign = 'center';
     graphCtx.fillText(p.lengthCm.toFixed(2), bx, by - 4);
 
-    // X tick
     graphCtx.fillStyle = '#666';
-    graphCtx.font = `${Math.round(GW*0.025)}px Noto Sans JP, sans-serif`;
-    graphCtx.fillText(`t${i+1}`, bx, pt + ph + 16);
-
-    barCenters.push({ x: bx, y: by + barH/2, lenM: p.lengthM, idx: i });
+    graphCtx.font = `${Math.round(GW * 0.025)}px Noto Sans JP, sans-serif`;
+    graphCtx.fillText(`t${i + 1}`, bx, pt + ph + 16);
   });
 
-  // Regression line (if >= 3)
+  // Regression line (>= 3 bars)
   if (placedPieces.length >= 3) {
-    // Each bar represents average velocity over segment: v = length/dt_cut
-    // t at midpoint of segment: t_mid = (i + 0.5) * CUT_DT
     const pts = placedPieces.map((p, i) => ({
       t: (i + 0.5) * CUT_DT,
       v: p.lengthM / CUT_DT
@@ -1062,52 +1112,43 @@ function drawGraph() {
     const n = pts.length;
     const sumT = pts.reduce((s, p) => s + p.t, 0);
     const sumV = pts.reduce((s, p) => s + p.v, 0);
-    const sumT2 = pts.reduce((s, p) => s + p.t*p.t, 0);
-    const sumTV = pts.reduce((s, p) => s + p.t*p.v, 0);
-    const slope = (n*sumTV - sumT*sumV) / (n*sumT2 - sumT*sumT);
-    const intercept = (sumV - slope*sumT) / n;
+    const sumT2 = pts.reduce((s, p) => s + p.t * p.t, 0);
+    const sumTV = pts.reduce((s, p) => s + p.t * p.v, 0);
+    const slope = (n * sumTV - sumT * sumV) / (n * sumT2 - sumT * sumT);
+    const intercept = (sumV - slope * sumT) / n;
 
-    // Draw regression
-    const tMin = pts[0].t - CUT_DT/2;
-    const tMax = pts[pts.length-1].t + CUT_DT/2;
-    const vMin = slope*tMin + intercept;
-    const vMax = slope*tMax + intercept;
-
-    // Convert to canvas coords
+    const tMin = pts[0].t - CUT_DT / 2;
+    const tMax = pts[pts.length - 1].t + CUT_DT / 2;
     const tToX = t => pl + (t / ((totalBars + 1) * CUT_DT)) * pw;
     const vToY = v => pt + ph - v * yScale * CUT_DT;
-
-    const x1 = tToX(tMin), y1 = vToY(vMin);
-    const x2 = tToX(tMax), y2 = vToY(vMax);
 
     graphCtx.save();
     graphCtx.strokeStyle = '#e74c3c';
     graphCtx.lineWidth = 2.5;
     graphCtx.setLineDash([8, 5]);
     graphCtx.beginPath();
-    graphCtx.moveTo(x1, y1);
-    graphCtx.lineTo(x2, y2);
+    graphCtx.moveTo(tToX(tMin), vToY(slope * tMin + intercept));
+    graphCtx.lineTo(tToX(tMax), vToY(slope * tMax + intercept));
     graphCtx.stroke();
     graphCtx.restore();
 
-    // Show result
-    const measuredA = slope;
     const theoryA = g * Math.sin(angleDeg * Math.PI / 180);
-    document.getElementById('res-measured').textContent = measuredA.toFixed(3) + ' m/s²';
+    document.getElementById('res-measured').textContent = slope.toFixed(3) + ' m/s²';
     document.getElementById('res-theory').textContent = theoryA.toFixed(3) + ' m/s²';
     document.getElementById('res-angle').textContent = Math.round(angleDeg) + '°';
     document.getElementById('result-box').classList.add('show');
   }
 }
 
-// ─── Graph tray setup ───────────────────────────────────────
+// ─── Graph tray ─────────────────────────────────────────────
 function buildGraphTray() {
   const gt = document.getElementById('graph-tray');
   gt.innerHTML = '';
   placedPieces = [];
+  if (cutPieces.length === 0) return;
   const maxLen = Math.max(...cutPieces.map(p => p.lengthM));
   cutPieces.forEach((p, i) => {
-    const h = Math.max(12, Math.round((p.lengthM / maxLen) * TRAY_MAX_H));
+    const h = Math.max(16, Math.round((p.lengthM / maxLen) * GRAPH_TRAY_MAX_H));
     const el = document.createElement('div');
     el.className = 'graph-tray-piece';
     el.style.height = h + 'px';
@@ -1116,7 +1157,7 @@ function buildGraphTray() {
   });
 }
 
-// ─── Drag & Drop for graph ──────────────────────────────────
+// ─── Drag & Drop ────────────────────────────────────────────
 const dragGhost = document.getElementById('drag-ghost');
 let draggingPiece = null;
 let draggingPieceIdx = -1;
@@ -1126,26 +1167,24 @@ function startDrag(el, clientX, clientY) {
   draggingPiece = cutPieces[draggingPieceIdx];
   if (!draggingPiece) return;
   const maxLen = Math.max(...cutPieces.map(p => p.lengthM));
-  const h = Math.max(12, Math.round((draggingPiece.lengthM / maxLen) * TRAY_MAX_H));
-  dragGhost.style.width = '32px';
+  const h = Math.max(16, Math.round((draggingPiece.lengthM / maxLen) * GRAPH_TRAY_MAX_H));
+  dragGhost.style.width = '48px';
   dragGhost.style.height = h + 'px';
   dragGhost.style.display = 'block';
   moveDragGhost(clientX, clientY);
 }
 
 function moveDragGhost(clientX, clientY) {
-  dragGhost.style.left = (clientX - 16) + 'px';
-  dragGhost.style.top = (clientY - parseInt(dragGhost.style.height)/2) + 'px';
+  dragGhost.style.left = (clientX - 24) + 'px';
+  dragGhost.style.top = (clientY - parseInt(dragGhost.style.height) / 2) + 'px';
 }
 
 function endDrag(clientX, clientY) {
   dragGhost.style.display = 'none';
   if (!draggingPiece) return;
-  // Check if dropped on graph canvas
   const rect = graphCanvas.getBoundingClientRect();
   if (clientX >= rect.left && clientX <= rect.right &&
       clientY >= rect.top && clientY <= rect.bottom) {
-    // Add to placed pieces (only if not already there)
     if (!placedPieces.find(p => p === draggingPiece)) {
       placedPieces.push(draggingPiece);
     }
@@ -1197,15 +1236,14 @@ function goToPhase3() {
   document.getElementById('si-2').classList.add('done');
   document.getElementById('si-3').classList.add('active');
   document.getElementById('result-box').classList.remove('show');
-  setTimeout(() => {
-    resizeGraph();
-  }, 50);
+  setTimeout(resizeGraph, 50);
 }
 
 // ─── Reset ──────────────────────────────────────────────────
 document.getElementById('btn-reset').addEventListener('click', () => {
   angleDeg = 30;
   tapeData = [];
+  dotPositions = [];
   cutPieces = [];
   cutsMade.clear();
   placedPieces = [];
@@ -1213,8 +1251,7 @@ document.getElementById('btn-reset').addEventListener('click', () => {
   showPhase('phase1');
   setStep(1);
   ['si-1','si-2','si-3'].forEach(id => {
-    const el = document.getElementById(id);
-    el.classList.remove('active','done');
+    document.getElementById(id).classList.remove('active','done');
   });
   document.getElementById('si-1').classList.add('active');
   document.getElementById('sc-1').classList.remove('done');
