@@ -245,6 +245,7 @@ let autoPreCutZone = 1;
 const CUT_ZONES = [];
 let cutsMade = new Set();
 
+// ── Helpers ──────────────────────────────────────────────────
 function setStep(n) {
   [1,2,3].forEach(i => {
     const si = document.getElementById('si-' + i);
@@ -261,6 +262,7 @@ function showPhase(id) {
   window.scrollTo(0, 0);
 }
 
+// ── Phase 1: Incline ─────────────────────────────────────────
 const inclineCanvas = document.getElementById('inclineCanvas');
 const incCtx = inclineCanvas.getContext('2d');
 const incWrapper = document.getElementById('incline-canvas-wrapper');
@@ -382,6 +384,7 @@ window.addEventListener('mouseup', onInclineUp);
 window.addEventListener('resize', resizeIncline);
 resizeIncline();
 
+// ── Animation ────────────────────────────────────────────────
 const animOverlay = document.getElementById('anim-overlay');
 const animCanvas = document.getElementById('anim-canvas');
 const animCtx = animCanvas.getContext('2d');
@@ -455,6 +458,7 @@ document.getElementById('btn-start').addEventListener('click', () => {
   generateTapeData(angleDeg); runAnimation();
 });
 
+// ── Phase 2: Tape ────────────────────────────────────────────
 const tapeCanvas = document.getElementById('tapeCanvas');
 const tapeCtx = tapeCanvas.getContext('2d');
 const tapeScroll = document.getElementById('tape-scroll-container');
@@ -485,11 +489,13 @@ function drawTape() {
   tapeCtx.beginPath(); tapeCtx.rect(30, 15, tapeW - 60, TAPE_H - 30);
   tapeCtx.fill(); tapeCtx.stroke();
 
+  // Gray out pre-cut region
   if (autoPreCutZone > 0 && CUT_ZONES[autoPreCutZone]) {
     tapeCtx.fillStyle = 'rgba(160,160,160,0.3)';
     tapeCtx.fillRect(30, 15, CUT_ZONES[autoPreCutZone] - 30, TAPE_H - 30);
   }
 
+  // Guide lines
   CUT_ZONES.forEach((x, i) => {
     if (i === 0 || i >= CUT_ZONES.length - 1 || cutsMade.has(i)) return;
     tapeCtx.save(); tapeCtx.setLineDash([4, 4]);
@@ -498,12 +504,14 @@ function drawTape() {
     tapeCtx.stroke(); tapeCtx.restore();
   });
 
+  // Dots at physics positions
   for (let d = 0; d < dotPositions.length; d++) {
     const x = dotToX(d), isBig = d % CUT_DOTS === 0;
     tapeCtx.beginPath(); tapeCtx.arc(x, DOT_ROW, isBig ? 3.5 : 2, 0, Math.PI * 2);
     tapeCtx.fillStyle = isBig ? '#8B4513' : '#c4944a'; tapeCtx.fill();
   }
 
+  // Segment labels
   tapeData.forEach((seg, i) => {
     const mx = (CUT_ZONES[i] + CUT_ZONES[i + 1]) / 2;
     tapeCtx.fillStyle = '#888'; tapeCtx.font = '9px Noto Sans JP, sans-serif';
@@ -512,6 +520,7 @@ function drawTape() {
     tapeCtx.textAlign = 'left';
   });
 
+  // Cut marks
   cutsMade.forEach(i => {
     if (!CUT_ZONES[i]) return;
     const x = CUT_ZONES[i];
@@ -611,6 +620,7 @@ document.getElementById('btn-to-graph').addEventListener('click', () => {
   if (document.getElementById('btn-to-graph').classList.contains('enabled')) goToPhase3();
 });
 
+// ── Phase 3: Graph ───────────────────────────────────────────
 const graphCanvas = document.getElementById('graphCanvas');
 const graphCtx = graphCanvas.getContext('2d');
 const graphWrapper = document.getElementById('graph-canvas-wrapper');
@@ -624,6 +634,11 @@ function resizeGraph() {
   graphPlotW = GW - GRAPH_PAD.left - GRAPH_PAD.right;
   graphPlotH = GH - GRAPH_PAD.top - GRAPH_PAD.bottom;
   drawGraph();
+}
+
+function getColW() {
+  if (!placedPieces.length) return Math.min(52, graphPlotW / 6);
+  return Math.min(52, graphPlotW / (Math.max(...placedPieces.map(p => p.col)) + 2));
 }
 
 function drawGraph() {
@@ -656,14 +671,19 @@ function drawGraph() {
     return;
   }
 
-  const maxLen = Math.max(...cutPieces.map(p => p.lengthM));
   const maxCol = Math.max(...placedPieces.map(p => p.col));
   const COL_W = Math.min(52, pw / (maxCol + 2));
-  const yScale = ph / (maxLen * 1.3);
+  const maxV = Math.max(...placedPieces.map(item => {
+    const k = item.piece.segTo - item.piece.segFrom;
+    return item.piece.lengthM / (k * CUT_DT);
+  }));
+  const yScale = ph / (maxV * 1.3);
 
   placedPieces.forEach(item => {
     const p = item.piece;
-    const barH = p.lengthM * yScale;
+    const k = p.segTo - p.segFrom;
+    const v = p.lengthM / (k * CUT_DT);
+    const barH = v * yScale;
     const barW = COL_W * 0.82;
     const bx = pl + (item.col + 0.5) * COL_W;
     const by = pt + ph - barH;
@@ -687,9 +707,10 @@ function drawGraph() {
   });
 
   if (placedPieces.length >= 3) {
-    const pts = placedPieces.map(item => ({
-      t: (item.col + 0.5) * CUT_DT, v: item.piece.lengthM / CUT_DT
-    }));
+    const pts = placedPieces.map(item => {
+      const k = item.piece.segTo - item.piece.segFrom;
+      return { t: (item.col + 0.5) * CUT_DT, v: item.piece.lengthM / (k * CUT_DT) };
+    });
     const n = pts.length;
     const sumT = pts.reduce((s,p) => s+p.t, 0), sumV = pts.reduce((s,p) => s+p.v, 0);
     const sumT2 = pts.reduce((s,p) => s+p.t*p.t, 0), sumTV = pts.reduce((s,p) => s+p.t*p.v, 0);
@@ -698,7 +719,7 @@ function drawGraph() {
 
     const COL_W2 = Math.min(52, graphPlotW / (maxCol + 2));
     const tToX = t => GRAPH_PAD.left + (t / CUT_DT) * COL_W2;
-    const vToY = v => GRAPH_PAD.top + graphPlotH - v * CUT_DT * yScale;
+    const vToY = v => GRAPH_PAD.top + graphPlotH - v * yScale;
     const tMax = (maxCol + 1) * CUT_DT;
 
     graphCtx.save(); graphCtx.strokeStyle = '#e74c3c'; graphCtx.lineWidth = 2.5; graphCtx.setLineDash([8,5]);
@@ -714,6 +735,7 @@ function drawGraph() {
   }
 }
 
+// ── Graph tray ───────────────────────────────────────────────
 function buildGraphTray() {
   const gt = document.getElementById('graph-tray');
   gt.innerHTML = ''; placedPieces = [];
@@ -727,6 +749,7 @@ function buildGraphTray() {
   });
 }
 
+// ── Drag & Drop ──────────────────────────────────────────────
 const dragGhost = document.getElementById('drag-ghost');
 let draggingPiece = null, draggingPieceIdx = -1, draggingBarIdx = -1;
 
@@ -767,12 +790,17 @@ function getBarAt(canvasX, canvasY) {
   const pl = GRAPH_PAD.left, pt = GRAPH_PAD.top, ph = graphPlotH;
   const maxCol = Math.max(...placedPieces.map(p => p.col));
   const COL_W = Math.min(52, graphPlotW / (maxCol + 2));
-  const yScale = ph / (Math.max(...cutPieces.map(p => p.lengthM)) * 1.3);
+  const maxVb = Math.max(...placedPieces.map(item => {
+    const kb = item.piece.segTo - item.piece.segFrom;
+    return item.piece.lengthM / (kb * CUT_DT);
+  }));
+  const yScaleB = ph / (maxVb * 1.3);
   for (let i = 0; i < placedPieces.length; i++) {
     const item = placedPieces[i];
     const bx = pl + (item.col + 0.5) * COL_W;
     const barW = COL_W * 0.82;
-    const by = pt + ph - item.piece.lengthM * yScale;
+    const kb = item.piece.segTo - item.piece.segFrom;
+    const by = pt + ph - (item.piece.lengthM / (kb * CUT_DT)) * yScaleB;
     if (Math.abs(canvasX - bx) < barW/2 + 4 && canvasY >= by - 4 && canvasY <= pt + ph + 4) return i;
   }
   return -1;
@@ -781,8 +809,14 @@ function getBarAt(canvasX, canvasY) {
 function startBarDrag(barIdx, cx, cy) {
   draggingBarIdx = barIdx;
   const item = placedPieces[barIdx];
-  const ph = graphPlotH, yScale = ph / (Math.max(...cutPieces.map(p => p.lengthM)) * 1.3);
-  showGhost(44, Math.max(20, Math.round(item.piece.lengthM * yScale)), cx, cy);
+  const ph = graphPlotH;
+  const maxVd = Math.max(...placedPieces.map(it => {
+    const kd = it.piece.segTo - it.piece.segFrom;
+    return it.piece.lengthM / (kd * CUT_DT);
+  }));
+  const yScaleD = ph / (maxVd * 1.3);
+  const kd = item.piece.segTo - item.piece.segFrom;
+  showGhost(44, Math.max(20, Math.round((item.piece.lengthM / (kd * CUT_DT)) * yScaleD)), cx, cy);
 }
 
 function endBarDrag(cx, cy) {
@@ -805,6 +839,7 @@ function endBarDrag(cx, cy) {
   draggingBarIdx = -1; drawGraph();
 }
 
+// Tray drag events
 document.getElementById('graph-tray').addEventListener('touchstart', e => {
   const el = e.target.closest('.graph-tray-piece');
   if (el) { startTrayDrag(el, e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }
@@ -815,6 +850,7 @@ document.getElementById('graph-tray').addEventListener('mousedown', e => {
   if (el) startTrayDrag(el, e.clientX, e.clientY);
 });
 
+// Bar drag events on graph canvas
 graphCanvas.addEventListener('touchstart', e => {
   if (draggingPiece) return;
   const rect = graphCanvas.getBoundingClientRect();
@@ -855,6 +891,7 @@ function goToPhase3() {
   setTimeout(resizeGraph, 50);
 }
 
+// ── Reset ────────────────────────────────────────────────────
 document.getElementById('btn-reset').addEventListener('click', () => {
   angleDeg = 30; tapeData = []; dotPositions = []; cutPieces = [];
   cutsMade.clear(); placedPieces = []; autoPreCutZone = 1;
