@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="わくわくサイエンスを授業で活用するための先生向けガイド">
+<title>先生の方へ | わくわくサイエンス</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --col-brand:       #6d28d9;
+  --col-brand-dark:  #4c1d95;
+  --col-brand-light: #ede9fe;
+  --col-physics:     #dc2626;
+  --col-physics-bg:  #fef2f2;
+  --col-chemistry:   #2563eb;
+  --col-chemistry-bg:#eff6ff;
+  --col-sim:         #059669;
+  --col-sim-bg:      #ecfdf5;
+  --col-bg:          #f5f0e8;
+  --col-text:        #1f2937;
+  --col-muted:       #6b7280;
+  --col-white:       #ffffff;
+  --radius:          16px;
+  --shadow:          0 4px 20px rgba(0,0,0,0.07);
+  --max-width:       860px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--col-bg);
+  color: var(--col-text);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+a { text-decoration: none; color: inherit; }
+
+/* ===== Header ===== */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.header-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+.header-back {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--col-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  transition: background 0.18s, color 0.18s;
+  white-space: nowrap;
+}
+.header-back:hover { background: var(--col-brand-light); color: var(--col-brand); }
+.logo {
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  background: linear-gradient(130deg, var(--col-brand), #a855f7);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.header-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--col-brand);
+  background: var(--col-brand-light);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+/* ===== Hero ===== */
+.page-hero {
+  background: linear-gradient(140deg, #1e1047 0%, #3b1280 40%, #5b21b6 100%);
+  color: white;
+  padding: 64px 24px 72px;
+  text-align: center;
+}
+.page-hero-eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.65);
+  background: rgba(255,255,255,0.10);
+  padding: 4px 14px;
+  border-radius: 20px;
+  margin-bottom: 16px;
+}
+.page-hero-title {
+  font-size: clamp(28px, 5vw, 46px);
+  font-weight: 900;
+  line-height: 1.2;
+  margin-bottom: 12px;
+}
+.page-hero-sub {
+  font-size: 15px;
+  color: rgba(255,255,255,0.75);
+  max-width: 540px;
+  margin: 0 auto;
+  line-height: 1.75;
+}
+
+/* ===== Page nav ===== */
+.page-nav {
+  background: var(--col-white);
+  border-bottom: 1px solid #f3f4f6;
+  position: sticky;
+  top: 60px;
+  z-index: 90;
+}
+.page-nav-inner {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.page-nav-inner::-webkit-scrollbar { display: none; }
+.page-nav a {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--col-muted);
+  padding: 14px 16px;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color 0.18s, border-color 0.18s;
+}
+.page-nav a:hover { color: var(--col-brand); border-bottom-color: var(--col-brand); }
+
+/* ===== Content ===== */
+.content {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 56px 24px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 64px;
+}
+
+/* ===== Section ===== */
+.section {}
+.section-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--col-brand);
+  margin-bottom: 8px;
+}
+.section-title {
+  font-size: 24px;
+  font-weight: 900;
+  margin-bottom: 16px;
+  line-height: 1.3;
+}
+.section-lead {
+  font-size: 15px;
+  color: var(--col-muted);
+  line-height: 1.8;
+  margin-bottom: 28px;
+}
+
+/* ===== Use case cards ===== */
+.usecase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.usecase-card {
+  background: var(--col-white);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.usecase-num {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--col-brand-light);
+  color: var(--col-brand);
+  font-size: 16px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.usecase-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.usecase-desc {
+  font-size: 13px;
+  color: var(--col-muted);
+  line-height: 1.7;
+}
+
+/* ===== Student ID section ===== */
+.id-explainer {
+  background: var(--col-white);
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.id-format-demo {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  justify-content: center;
+  margin: 4px 0;
+}
+.id-digit-group {
+  text-align: center;
+}
+.id-digits {
+  font-size: 48px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.id-digits.class-part { color: var(--col-physics); }
+.id-digits.num-part   { color: var(--col-chemistry); }
+.id-sep {
+  font-size: 32px;
+  font-weight: 900;
+  color: #e5e7eb;
+  padding: 0 4px;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+.id-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--col-muted);
+  margin-top: 4px;
+}
+.id-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.id-example-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.id-example-code {
+  font-size: 18px;
+  font-weight: 900;
+  background: #f3f4f6;
+  padding: 4px 12px;
+  border-radius: 8px;
+  letter-spacing: 2px;
+  min-width: 80px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.id-example-desc { color: var(--col-muted); }
+
+/* ===== Steps ===== */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.step {
+  display: flex;
+  gap: 20px;
+  padding-bottom: 28px;
+  position: relative;
+}
+.step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 19px;
+  top: 40px;
+  bottom: 0;
+  width: 2px;
+  background: #e5e7eb;
+}
+.step-num {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--col-brand);
+  color: white;
+  font-size: 16px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.step-body { padding-top: 8px; }
+.step-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.step-desc {
+  font-size: 14px;
+  color: var(--col-muted);
+  line-height: 1.75;
+}
+
+/* ===== Info box ===== */
+.info-box {
+  border-radius: 12px;
+  padding: 18px 20px;
+  font-size: 13px;
+  line-height: 1.75;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.info-box--note {
+  background: var(--col-brand-light);
+  color: var(--col-brand-dark);
+  border: 1px solid #ddd6fe;
+}
+.info-box--tip {
+  background: var(--col-sim-bg);
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.info-box-icon {
+  font-size: 16px;
+  font-weight: 900;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ===== Content links ===== */
+.content-links {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.content-link-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--col-white);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+  transition: transform 0.18s, box-shadow 0.18s;
+}
+.content-link-item:hover {
+  transform: translateX(4px);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+}
+.content-link-icon {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.content-link-icon--physics   { background: var(--col-physics-bg);   color: var(--col-physics); }
+.content-link-icon--chemistry { background: var(--col-chemistry-bg); color: var(--col-chemistry); }
+.content-link-icon--sim       { background: var(--col-sim-bg);       color: var(--col-sim); }
+.content-link-body { flex: 1; }
+.content-link-title { font-size: 15px; font-weight: 700; }
+.content-link-sub   { font-size: 12px; color: var(--col-muted); margin-top: 2px; }
+.content-link-arrow {
+  font-size: 18px;
+  color: var(--col-muted);
+}
+
+/* ===== Footer ===== */
+.site-footer {
+  background: #1a0e3d;
+  color: rgba(255,255,255,0.55);
+  text-align: center;
+  padding: 36px 24px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.site-footer strong { color: rgba(255,255,255,0.9); }
+.site-footer a {
+  color: rgba(255,255,255,0.7);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.site-footer a:hover { color: white; }
+
+@media (max-width: 599px) {
+  .header-tag { display: none; }
+  .id-format-demo { flex-wrap: wrap; }
+  .usecase-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== Header ===== -->
+<header class="site-header">
+  <div class="header-inner">
+    <a href="index.html" class="header-back" aria-label="ポータルトップへ戻る">&larr; トップ</a>
+    <div class="logo">わくわくサイエンス</div>
+    <div class="header-tag">先生向け</div>
+  </div>
+</header>
+
+<!-- ===== Hero ===== -->
+<div class="page-hero">
+  <div class="page-hero-eyebrow">For Teachers</div>
+  <h1 class="page-hero-title">先生の方へ</h1>
+  <p class="page-hero-sub">わくわくサイエンスを授業でどう使うか。生徒の結果をどう確認するか。このページで説明します。</p>
+</div>
+
+<!-- ===== Page nav ===== -->
+<nav class="page-nav" aria-label="ページ内ナビゲーション">
+  <div class="page-nav-inner">
+    <a href="#how-to-use">授業での使い方</a>
+    <a href="#student-id">学籍番号のしくみ</a>
+    <a href="#check-results">結果の確認方法</a>
+    <a href="#contents">コンテンツ一覧</a>
+  </div>
+</nav>
+
+<!-- ===== Main content ===== -->
+<main>
+<div class="content">
+
+  <!-- 授業での使い方 -->
+  <section class="section" id="how-to-use">
+    <div class="section-eyebrow">How to use</div>
+    <h2 class="section-title">授業での活用パターン</h2>
+    <p class="section-lead">
+      わくわくサイエンスは、授業の様々な場面で使えるように設計されています。
+      先生が演示するのにも、生徒が自分で取り組むのにも対応しています。
+    </p>
+
+    <div class="usecase-grid">
+      <div class="usecase-card">
+        <div class="usecase-num">1</div>
+        <div class="usecase-title">導入・演示</div>
+        <div class="usecase-desc">授業の最初にプロジェクターで映して、実験や現象のイメージを共有する。</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-num">2</div>
+        <div class="usecase-title">個人演習</div>
+        <div class="usecase-desc">生徒が各自のタブレットで取り組む。自分のペースで繰り返し挑戦できる。</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-num">3</div>
+        <div class="usecase-title">予習・宿題</div>
+        <div class="usecase-desc">URLを配布して家庭学習の課題として出す。取り組んだ結果がスプレッドシートに記録される。</div>
+      </div>
+      <div class="usecase-card">
+        <div class="usecase-num">4</div>
+        <div class="usecase-title">確認テスト</div>
+        <div class="usecase-desc">単元の終わりに確認問題として使用。結果を一覧で見て理解度を把握する。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 学籍番号のしくみ -->
+  <section class="section" id="student-id">
+    <div class="section-eyebrow">Student ID</div>
+    <h2 class="section-title">学籍番号のしくみ</h2>
+    <p class="section-lead">
+      生徒は問題に取り組む前に、自分の学籍番号を入力します。
+      この番号が結果と一緒にスプレッドシートに記録されるので、誰がどのくらい取り組んだか確認できます。
+    </p>
+
+    <div class="id-explainer">
+      <div>
+        <p style="font-size:13px;font-weight:700;color:var(--col-muted);margin-bottom:12px">番号の例（先生が形式を決められます）</p>
+        <div class="id-format-demo">
+          <div class="id-digit-group">
+            <div class="id-digits class-part">11</div>
+            <div class="id-label">クラス番号</div>
+          </div>
+          <div class="id-sep">&minus;</div>
+          <div class="id-digit-group">
+            <div class="id-digits num-part">01</div>
+            <div class="id-label">出席番号</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="id-examples">
+        <div class="id-example-row">
+          <span class="id-example-code">1101</span>
+          <span class="id-example-desc">1年1組1番</span>
+        </div>
+        <div class="id-example-row">
+          <span class="id-example-code">1215</span>
+          <span class="id-example-desc">1年2組15番</span>
+        </div>
+        <div class="id-example-row">
+          <span class="id-example-code">2303</span>
+          <span class="id-example-desc">2年3組3番</span>
+        </div>
+      </div>
+
+      <div class="info-box info-box--note">
+        <div class="info-box-icon">！</div>
+        <div>
+          番号は生徒が自分で入力する<strong>自己申告方式</strong>です。入力ミスや悪意ある入力を完全に防ぐことはできません。授業の文脈では十分に機能しますが、テストの点数管理など厳密な用途には向きません。
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 結果の確認方法 -->
+  <section class="section" id="check-results">
+    <div class="section-eyebrow">Check results</div>
+    <h2 class="section-title">結果の確認方法</h2>
+    <p class="section-lead">
+      生徒が問題に取り組むと、結果が自動的にGoogleスプレッドシートに記録されます。
+      スプレッドシートを開くだけで、クラス全員の取り組み状況を確認できます。
+    </p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">生徒にURLとクラスを伝える</div>
+          <div class="step-desc">
+            わくわく物理基礎・化学基礎のURLを生徒に配布します。最初のアクセス時に学籍番号の入力を促します。番号の形式は先生が決めた規則を事前に伝えておいてください。
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">生徒が問題に取り組む</div>
+          <div class="step-desc">
+            生徒が各コンテンツで問題を解くと、学籍番号・スコア・取り組んだ単元などの情報が自動的に送信されます。生徒は特別な操作をする必要はありません。
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">スプレッドシートで結果を確認</div>
+          <div class="step-desc">
+            Google スプレッドシートに自動的に行が追加されます。学籍番号・日時・単元・スコアが一覧で確認できます。フィルターや並べ替えを使って、クラス別・生徒別に絞り込むことができます。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box info-box--tip">
+      <div class="info-box-icon">✓</div>
+      <div>
+        <strong>スプレッドシートのURLは各コンテンツの担当者（開発者）に確認してください。</strong><br>
+        今後、このページから直接スプレッドシートを開けるリンクを提供予定です。
+      </div>
+    </div>
+  </section>
+
+  <!-- コンテンツ一覧 -->
+  <section class="section" id="contents">
+    <div class="section-eyebrow">Contents</div>
+    <h2 class="section-title">コンテンツ一覧</h2>
+    <p class="section-lead">
+      現在公開中のコンテンツです。クリックして各サイトを確認できます。
+    </p>
+
+    <div class="content-links">
+      <a href="https://ruvoir328-alt.github.io/wakuwaku-physics/" target="_blank" rel="noopener noreferrer" class="content-link-item">
+        <div class="content-link-icon content-link-icon--physics">力</div>
+        <div class="content-link-body">
+          <div class="content-link-title">わくわく物理基礎</div>
+          <div class="content-link-sub">力・運動・エネルギー / 問題あり / 結果をスプレッドシートに送信</div>
+        </div>
+        <div class="content-link-arrow">→</div>
+      </a>
+
+      <a href="https://ruvoir328-alt.github.io/wakuwaku-chemistry/" target="_blank" rel="noopener noreferrer" class="content-link-item">
+        <div class="content-link-icon content-link-icon--chemistry">化</div>
+        <div class="content-link-body">
+          <div class="content-link-title">わくわく化学基礎</div>
+          <div class="content-link-sub">元素・化学結合・反応 / 問題あり / 結果をスプレッドシートに送信</div>
+        </div>
+        <div class="content-link-arrow">→</div>
+      </a>
+
+      <a href="./inclined-plane-simulator.html" class="content-link-item">
+        <div class="content-link-icon content-link-icon--sim">実</div>
+        <div class="content-link-body">
+          <div class="content-link-title">斜面台車シミュレーター</div>
+          <div class="content-link-sub">実験シミュレーション / 演示・体験用</div>
+        </div>
+        <div class="content-link-arrow">→</div>
+      </a>
+    </div>
+  </section>
+
+</div>
+</main>
+
+<!-- ===== Footer ===== -->
+<footer class="site-footer">
+  <p><strong>わくわくサイエンス</strong> &mdash; 高校理科学習プラットフォーム</p>
+  <p>ご意見・ご要望は <a href="index.html">ポータルトップ</a> からお知らせください。</p>
+</footer>
+
+</body>
+</html>
